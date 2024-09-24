@@ -182,6 +182,7 @@ if not os.path.exists(experiment_name+'/evoman_solstate'):
     print( '\nNEW EVOLUTION\n')
 
     pop = np.random.uniform(dom_l, dom_u, (npop, n_vars))
+    print(pop)
     fit_pop = evaluate(pop)
     best = np.argmax(fit_pop)
     mean = np.mean(fit_pop)
@@ -196,6 +197,7 @@ else:
 
     env.load_state()
     pop = env.solutions[0]
+    print(pop)
     fit_pop = env.solutions[1]
 
     best = np.argmax(fit_pop)
