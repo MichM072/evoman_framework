@@ -20,12 +20,12 @@ EXPERIMENT_NAME = 'optimization_specialist_SA_group55'
 N_HIDDEN_NEURONS = 10
 POPULATION_SIZE = 100
 GENERATIONS = 50
-CROSSOVER_PROBABILITY = 0.6
+CROSSOVER_PROBABILITY = 0.5
 
 # Simulated Annealing Hyper parameters
 INIT_T = 100 # Starting temp
 MIN_T = 1 # Minimum Temp
-MAX_MUTPB = 0.1 # Max mutation probability
+MAX_MUTPB = 0.2 # Max mutation probability
 MIN_MUTPB = 0.001 # Min mutation probability
 COOLING_RATE = 0.95 # Cooling Rate
 
