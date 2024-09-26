@@ -8,7 +8,7 @@ from GA_Spec_SA import GASpecialistSA
 
 # Test implementation
 
-enemies = [1, 4, 6]
+enemies = [4, 5, 7]
 
 SA_agent = GASpecialistSA()
 

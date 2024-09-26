@@ -16,7 +16,7 @@ from evoman.environment import Environment
 from demo_controller import player_controller
 
 HEADLESS = True
-EXPERIMENT_NAME = 'optimization_specialist_SA_group55'
+EXPERIMENT_NAME = "optimization_specialist_SA_group55"
 N_HIDDEN_NEURONS = 10
 POPULATION_SIZE = 100
 GENERATIONS = 50
@@ -25,13 +25,14 @@ CROSSOVER_PROBABILITY = 0.5
 # Simulated Annealing Hyper parameters
 INIT_T = 100  # Starting temp
 MIN_T = 1  # Minimum Temp
-MAX_MUTPB = 0.2  # Max mutation probability
-MIN_MUTPB = 0.001  # Min mutation probability
-COOLING_RATE = 0.99  # Cooling Rate
+MAX_MUTPB = 0.5  # Max mutation probability
+MIN_MUTPB = 0.01  # Min mutation probability
+COOLING_RATE = 0.5  # Cooling Rate
+
 
 class GASpecialistSA:
     def __init__(self):
-        self.enemy = 4 # default placeholder
+        self.enemy = 4  # default placeholder
         self.env = ""
 
     # Environment Setup
@@ -52,23 +53,34 @@ class GASpecialistSA:
             enemymode="static",
             level=2,
             speed="fastest",
-            visuals=False
+            visuals=False,
+            randomini="yes",
         )
 
     def setup_deap(self, env: Environment) -> Toolbox:
         # Sets up DEAP's genetic algorithm
-        n_vars = (env.get_num_sensors() + 1) * N_HIDDEN_NEURONS + (N_HIDDEN_NEURONS + 1) * 5
+        n_vars = (env.get_num_sensors() + 1) * N_HIDDEN_NEURONS + (
+            N_HIDDEN_NEURONS + 1
+        ) * 5
 
-        creator.create('FitnessMax', base.Fitness, weights=(1.0,))
-        creator.create('Individual', list, fitness=creator.FitnessMax)
+        creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+        creator.create("Individual", list, fitness=creator.FitnessMax)
 
         toolbox = base.Toolbox()
-        toolbox.register('individual', tools.initIterate, creator.Individual, lambda: self.generate_individual(n_vars))
-        toolbox.register('population', tools.initRepeat, list, toolbox.individual)
-        toolbox.register('evaluate', self.simulation, env)
-        toolbox.register('mate', tools.cxTwoPoint,)
-        toolbox.register('mutate', tools.mutFlipBit, indpb=0.2)
-        toolbox.register('select', tools.selTournament, tournsize=3)
+        toolbox.register(
+            "individual",
+            tools.initIterate,
+            creator.Individual,
+            lambda: self.generate_individual(n_vars),
+        )
+        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+        toolbox.register("evaluate", self.simulation, env)
+        toolbox.register(
+            "mate",
+            tools.cxTwoPoint,
+        )
+        toolbox.register("mutate", tools.mutFlipBit, indpb=0.2)
+        toolbox.register("select", tools.selTournament, tournsize=3)
 
         return toolbox
 
@@ -80,7 +92,6 @@ class GASpecialistSA:
         # Evaluates an individual's fitness in the environment.
         fitness, _, _, _ = env.play(pcont=np.array(individual))
         return (fitness,)
-
 
     def apply_limits(self, individual: np.array) -> np.array:
         # Applies limits to the individual's gene values.
@@ -95,10 +106,10 @@ class GASpecialistSA:
         T = INIT_T
 
         stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register('avg', np.mean)
-        stats.register('std', np.std)
-        stats.register('min', np.min)
-        stats.register('max', np.max)
+        stats.register("avg", np.mean)
+        stats.register("std", np.std)
+        stats.register("min", np.min)
+        stats.register("max", np.max)
 
         self.log_initial_population_fitness()
 
@@ -131,8 +142,12 @@ class GASpecialistSA:
 
     def log_initial_population_fitness(self) -> None:
         # Logs the initial population's fitness to a file.
-        with open(EXPERIMENT_NAME + '/results.txt', 'a') as file_aux:
-            file_aux.write('\n\ngeneration best mean std\n')
+        with open(EXPERIMENT_NAME + "/results.txt", "a") as file_aux:
+            file_aux.write(
+                "\n{:<10} {:<10} {:<10} {:<10} ENEMY: {}\n".format(
+                    "GENERATION", "BEST", "MEAN", "STD", self.enemy
+                )
+            )
 
     def evaluate_population(self, population: np.array, toolbox) -> None:
         # Evaluates the fitness of the entire population.
@@ -142,21 +157,24 @@ class GASpecialistSA:
             ind.fitness.values = fit
 
     def log_generation_statistics(
-            self,
-            generation: np.array,
-            best: np.array,
-            record: np.array) -> None:
+        self, generation: np.array, best: np.array, record: np.array
+    ) -> None:
         # Logs the statistics for the current generation.
         best_ind = best[0]
         best_fitness = best_ind.fitness.values[0]
 
         print(
-            f'\n GENERATION {generation} best: {round(best_fitness, 6)} avg: {round(record["avg"], 6)} std: {round(record["std"], 6)}')
+            f'\n GENERATION {generation} best: {round(best_fitness, 6)} avg: {round(record["avg"], 6)} std: {round(record["std"], 6)} enemy: {self.enemy}'
+        )
 
-        with open(EXPERIMENT_NAME + '/results.txt', 'a') as file_aux:
-            file_aux.write(f'\n{generation} {round(best_fitness, 6)} {round(record["avg"], 6)} {round(record["std"], 6)}')
+        with open(EXPERIMENT_NAME + "/results.txt", "a") as file_aux:
+            file_aux.write(
+                f'\n{generation:<10} {best_fitness:<10.6f} {record["avg"]:<10.6f} {record["std"]:<10.6f}'
+            )
 
-    def generate_offspring(self, population: np.array, toolbox, mutation_prob: float) -> list:
+    def generate_offspring(
+        self, population: np.array, toolbox, mutation_prob: float
+    ) -> list:
         # Generates offspring through selection, crossover, and mutation.
         offspring = toolbox.select(population, len(population))
         offspring = list(map(toolbox.clone, offspring))
@@ -183,8 +201,8 @@ class GASpecialistSA:
 
     def save_results(self, best) -> None:
         # Saves the best solution and logs the simulation state.
-        np.savetxt(EXPERIMENT_NAME + f'/best_{self.enemy}.txt', best[0])
-        print(f'\nBest fitness achieved: {best[0].fitness.values[0]}')
+        np.savetxt(EXPERIMENT_NAME + f"/best_{self.enemy}.txt", best[0])
+        print(f"\nBest fitness achieved: {best[0].fitness.values[0]}")
 
         # Save the simulation state and log state of the environment
         self.env.state_to_log()
@@ -199,4 +217,4 @@ class GASpecialistSA:
 
         end_time = time.time()
 
-        print(f'\nExecution time: {round((end_time - ini) / 60)} minutes')
+        print(f"\nExecution time: {round((end_time - ini) / 60)} minutes")
