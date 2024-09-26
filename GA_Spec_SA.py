@@ -27,7 +27,7 @@ INIT_T = 100  # Starting temp
 MIN_T = 1  # Minimum Temp
 MAX_MUTPB = 0.5  # Max mutation probability
 MIN_MUTPB = 0.01  # Min mutation probability
-COOLING_RATE = 0.5  # Cooling Rate
+COOLING_RATE = 0.99  # Cooling Rate
 
 
 class GASpecialistSA:

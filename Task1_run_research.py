@@ -43,7 +43,6 @@ def train_agent(agent: GASpecialistSA,
             file_aux.write(f'ENEMY RUNS\n')
             # Create spots for every possible enemy.
             for i in range(1,9):
-                print(i)
                 file_aux.write(f'{i}: 0\n')
 
     # Load the train log
@@ -76,10 +75,13 @@ def train_agent(agent: GASpecialistSA,
 
         for i in range(allowed_runs):
             agent.run_experiment(enemy=enemy, mode="Train")
-            current_log[enemy][1] = str(i)
 
-            with open(agent.experiment_name + "/trainlog.txt", "w") as file_aux:
-                file_aux.write(f'{current_log[enemy]}\n')
+            with open(agent.experiment_name + "/trainlog.txt", "rw") as file_aux:
+                write_log = file_aux.readlines()
+                write_log.insert(enemy, f"{enemy}: {i}")
+                write_log = "".join(write_log)
+
+                file_aux.write(write_log)
 
 
 
