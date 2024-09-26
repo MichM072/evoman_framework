@@ -31,10 +31,13 @@ COOLING_RATE = 0.5  # Cooling Rate
 
 
 class GASpecialistSA:
-    def __init__(self, SA: bool = False):
+    def __init__(self, SA: bool = False,
+                 experiment_name: str = EXPERIMENT_NAME):
         self.enemy = 4  # default placeholder
         self.env = ""
         self.SA = SA  # Simulated Annealing enabled or disabled
+        self.mode = "Train"
+        self.experiment_name = experiment_name
 
     # Environment Setup
     def setup_environment(self, enemy: int) -> Environment:
@@ -43,11 +46,11 @@ class GASpecialistSA:
             os.environ["SDL_VIDEODRIVER"] = "dummy"
 
         # Creates folder in path if does not exist
-        if not os.path.exists(EXPERIMENT_NAME):
-            os.makedirs(EXPERIMENT_NAME)
+        if not os.path.exists(self.experiment_name):
+            os.makedirs(self.experiment_name)
 
         return Environment(
-            experiment_name=EXPERIMENT_NAME,
+            experiment_name=self.experiment_name,
             enemies=[enemy],
             playermode="ai",
             player_controller=player_controller(N_HIDDEN_NEURONS),
@@ -151,7 +154,7 @@ class GASpecialistSA:
 
     def log_initial_population_fitness(self) -> None:
         # Logs the initial population's fitness to a file.
-        with open(EXPERIMENT_NAME + "/results.txt", "a") as file_aux:
+        with open(self.experiment_name + "/results.txt", "a") as file_aux:
             file_aux.write(
                 "\n{:<10} {:<10} {:<10} {:<10} ENEMY: {}\n".format(
                     "GENERATION", "BEST", "MEAN", "STD", self.enemy
@@ -176,7 +179,7 @@ class GASpecialistSA:
             f'\n GENERATION {generation} best: {round(best_fitness, 6)} avg: {round(record["avg"], 6)} std: {round(record["std"], 6)} enemy: {self.enemy}'
         )
 
-        with open(EXPERIMENT_NAME + "/results.txt", "a") as file_aux:
+        with open(self.experiment_name + "/results.txt", "a") as file_aux:
             file_aux.write(
                 f'\n{generation:<10} {best_fitness:<10.6f} {record["avg"]:<10.6f} {record["std"]:<10.6f}'
             )
@@ -210,19 +213,29 @@ class GASpecialistSA:
 
     def save_results(self, best) -> None:
         # Saves the best solution and logs the simulation state.
-        np.savetxt(EXPERIMENT_NAME + f"/best_{self.enemy}.txt", best[0])
+        np.savetxt(self.experiment_name + f"/best_{self.enemy}.txt", best[0])
         print(f"\nBest fitness achieved: {best[0].fitness.values[0]}")
 
         # Save the simulation state and log state of the environment
         self.env.state_to_log()
 
-    def run_experiment(self, enemy: int):
+    def run_experiment(self, enemy: int, mode: str):
         self.enemy = enemy
+        self.mode = mode
         ini = time.time()
         self.env = self.setup_environment(enemy=self.enemy)
-        toolbox = self.setup_deap(self.env)
 
-        self.run_evolution(toolbox)
+        if self.mode == "Train":
+            toolbox = self.setup_deap(self.env)
+            self.run_evolution(toolbox)
+        elif self.mode == "Test":
+            # Run simulation with the best solution for selected enemy.
+            best_ind = np.loadtxt(self.experiment_name+f'/best_{self.enemy}.txt')
+            print("\n Using best solution from memory \n")
+            fitness,player,enemy,game_time = self.env.play(pcont=best_ind)
+            return fitness,player,enemy,game_time
+        else:
+            print(f"Invalid mode: {self.mode}")
 
         end_time = time.time()
 
