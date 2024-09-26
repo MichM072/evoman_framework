@@ -76,12 +76,14 @@ def train_agent(agent: GASpecialistSA,
         for i in range(allowed_runs):
             agent.run_experiment(enemy=enemy, mode="Train")
 
-            with open(agent.experiment_name + "/trainlog.txt", "rw") as file_aux:
+            with open(agent.experiment_name + "/trainlog.txt", "r+") as file_aux:
                 write_log = file_aux.readlines()
-                write_log.insert(enemy, f"{enemy}: {i}")
-                write_log = "".join(write_log)
+                file_aux.seek(0)
+                write_log[enemy] = f"{enemy}: {i+1}\n"
 
-                file_aux.write(write_log)
+                file_aux.writelines(write_log)
+
+                file_aux.truncate()
 
 
 
