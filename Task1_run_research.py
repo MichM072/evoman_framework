@@ -50,16 +50,10 @@ def train_agent(agent: GASpecialistSA,
         temp_log = file_aux.readlines()
         current_log = list(map(str.split, temp_log[1:]))
 
-    # if(current_log[0] == "FINISHED" & overwrite == False):
-    #     print()
-    #     return
-    # elif(current_log[0] == "FINISHED" & overwrite == True):
-    #     pass
-    # elif(current_log[0] == "UNFINISHED" & overwrite == False):
-    #     max_runs = max_runs - current_log[2]
-    #     print(f"Prior training was unfinished, {max_runs} runs remaining.")
-
     for enemy in enemies:
+
+        if not os.path.exists(agent.experiment_name + f"/enemy_{enemy}"):
+            os.makedirs(agent.experiment_name + f"/enemy_{enemy}")
 
         passed_runs = int(current_log[enemy][1])
         allowed_runs = max_runs # How many runs should the agent have left vs an enemy.
@@ -73,8 +67,8 @@ def train_agent(agent: GASpecialistSA,
             allowed_runs = max_runs - passed_runs
             print(f"Agent has {max_runs} runs vs {enemy} remaining")
 
-        for i in range(allowed_runs):
-            agent.run_experiment(enemy=enemy, mode="Train")
+        for i in range(passed_runs, allowed_runs):
+            agent.run_experiment(enemy=enemy, mode="Train", run=i)
 
             with open(agent.experiment_name + "/trainlog.txt", "r+") as file_aux:
                 write_log = file_aux.readlines()
@@ -86,6 +80,9 @@ def train_agent(agent: GASpecialistSA,
                 file_aux.truncate()
 
 
+# TODO: Create Test function (Test agent)
+
+# TODO: Create plots
 
 for ga_agent in [SA_agent, Normal_agent]:
     train_agent(ga_agent, __enemies)

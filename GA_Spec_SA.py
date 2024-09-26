@@ -38,6 +38,9 @@ class GASpecialistSA:
         self.SA = SA  # Simulated Annealing enabled or disabled
         self.mode = "Train"
         self.experiment_name = experiment_name
+        self.run = 0
+
+    # TODO: wipe results.txt on init
 
     # Environment Setup
     def setup_environment(self, enemy: int) -> Environment:
@@ -213,14 +216,15 @@ class GASpecialistSA:
 
     def save_results(self, best) -> None:
         # Saves the best solution and logs the simulation state.
-        np.savetxt(self.experiment_name + f"/best_{self.enemy}.txt", best[0])
+        np.savetxt(self.experiment_name + f"/enemy_{self.enemy}/best_{self.run}.txt", best[0])
         print(f"\nBest fitness achieved: {best[0].fitness.values[0]}")
 
         # Save the simulation state and log state of the environment
         self.env.state_to_log()
 
-    def run_experiment(self, enemy: int, mode: str):
+    def run_experiment(self, enemy: int, mode: str, run: int):
         self.enemy = enemy
+        self.run = run
         self.mode = mode
         ini = time.time()
         self.env = self.setup_environment(enemy=self.enemy)
