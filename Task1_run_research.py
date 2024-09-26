@@ -10,7 +10,8 @@ from GA_Spec_SA import GASpecialistSA
 
 enemies = [4, 5, 7]
 
-SA_agent = GASpecialistSA()
+SA_agent = GASpecialistSA(SA=True)
+Normal_agent = GASpecialistSA(SA=False)
 
 for e in enemies:
-    SA_agent.run_experiment(e)
+    Normal_agent.run_experiment(e)

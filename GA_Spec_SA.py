@@ -31,9 +31,10 @@ COOLING_RATE = 0.5  # Cooling Rate
 
 
 class GASpecialistSA:
-    def __init__(self):
+    def __init__(self, SA: bool = False):
         self.enemy = 4  # default placeholder
         self.env = ""
+        self.SA = SA  # Simulated Annealing enabled or disabled
 
     # Environment Setup
     def setup_environment(self, enemy: int) -> Environment:
@@ -113,11 +114,16 @@ class GASpecialistSA:
 
         self.log_initial_population_fitness()
 
+        # Assign a function to the probability if we use SA else use default mutation proability
+        mutpb_func = lambda: (
+            self.calculate_mutation_probability_SA(T) if self.SA else MAX_MUTPB
+        )
+
         for generation in range(GENERATIONS):
             self.evaluate_population(population, toolbox)
 
             # Calculate mutation probability
-            mutation_prob = MIN_MUTPB + (MAX_MUTPB - MIN_MUTPB) * (T / INIT_T)
+            mutation_prob = mutpb_func()
 
             print(f"Mutation prob: {mutation_prob}")
             print(f"Temperature: {T}")
@@ -139,6 +145,9 @@ class GASpecialistSA:
             T = T * COOLING_RATE
 
         self.save_results(best)
+
+    def calculate_mutation_probability_SA(self, T):
+        return MIN_MUTPB + (MAX_MUTPB - MIN_MUTPB) * (T / INIT_T)
 
     def log_initial_population_fitness(self) -> None:
         # Logs the initial population's fitness to a file.
