@@ -27,7 +27,7 @@ INIT_T = 100 # Starting temp
 MIN_T = 1 # Minimum Temp
 MAX_MUTPB = 0.2 # Max mutation probability
 MIN_MUTPB = 0.001 # Min mutation probability
-COOLING_RATE = 0.95 # Cooling Rate
+COOLING_RATE = 0.99 # Cooling Rate
 
 # Environment Setup
 def setup_environment(enemy: int) -> Environment:
