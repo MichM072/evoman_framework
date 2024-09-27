@@ -15,37 +15,47 @@ from deap.base import Toolbox
 from evoman.environment import Environment
 from demo_controller import player_controller
 
-HEADLESS = True
-EXPERIMENT_NAME = "optimization_specialist_SA_group55"
-N_HIDDEN_NEURONS = 10
-POPULATION_SIZE = 100
-GENERATIONS = 50
-CROSSOVER_PROBABILITY = 0.5
-
-# Simulated Annealing Hyper parameters
-INIT_T = 100  # Starting temp
-MIN_T = 1  # Minimum Temp
-MAX_MUTPB = 0.1  # Max mutation probability
-MIN_MUTPB = 0.001  # Min mutation probability
-COOLING_RATE = 0.99  # Cooling Rate
-
 
 class GASpecialistSA:
-    def __init__(self, SA: bool = False,
-                 experiment_name: str = EXPERIMENT_NAME):
+
+    def __init__(
+        self,
+        sa: bool = False,
+        headless: bool = True,
+        experiment_name: str = "optimization_specialist_sa_group55",
+        n_hidden_neurons: int = 10,
+        population_size: int = 100,
+        generations: int = 50,
+        crossover_probability: float = 0.5,
+        init_t: float = 100,
+        min_t: float = 1,
+        max_mutpb: float = 0.5,
+        min_mutpb: float = 0.01,
+        cooling_rate: float = 0.5,
+    ):
+
+        self.headless = headless
+        self.experiment_name = experiment_name
+        self.n_hidden_neurons = n_hidden_neurons
+        self.population_size = population_size
+        self.generations = generations
+        self.crossover_probability = crossover_probability
+
+        # Simulated Annealing Hyperparameters
+        self.init_t = init_t  # Starting temp
+        self.min_t = min_t  # Minimum Temp
+        self.max_mutpb = max_mutpb  # Max mutation probability
+        self.min_mutpb = min_mutpb  # Min mutation probability
+        self.cooling_rate = cooling_rate  # Cooling Rate
+
         self.enemy = 4  # default placeholder
         self.env = ""
-        self.SA = SA  # Simulated Annealing enabled or disabled
-        self.mode = "Train"
-        self.experiment_name = experiment_name
-        self.run = 0
-
-    # TODO: wipe results.txt on init
+        self.sa = sa  # Simulated Annealing enabled or disabled
 
     # Environment Setup
     def setup_environment(self, enemy: int) -> Environment:
         # Headless meaning the experiment runs faster
-        if HEADLESS:
+        if self.headless:
             os.environ["SDL_VIDEODRIVER"] = "dummy"
 
         # Creates folder in path if does not exist
@@ -56,7 +66,7 @@ class GASpecialistSA:
             experiment_name=self.experiment_name,
             enemies=[enemy],
             playermode="ai",
-            player_controller=player_controller(N_HIDDEN_NEURONS),
+            player_controller=player_controller(self.n_hidden_neurons),
             enemymode="static",
             level=2,
             speed="fastest",
@@ -66,8 +76,8 @@ class GASpecialistSA:
 
     def setup_deap(self, env: Environment) -> Toolbox:
         # Sets up DEAP's genetic algorithm
-        n_vars = (env.get_num_sensors() + 1) * N_HIDDEN_NEURONS + (
-            N_HIDDEN_NEURONS + 1
+        n_vars = (env.get_num_sensors() + 1) * self.n_hidden_neurons + (
+            self.n_hidden_neurons + 1
         ) * 5
 
         creator.create("FitnessMax", base.Fitness, weights=(1.0,))
@@ -106,11 +116,11 @@ class GASpecialistSA:
 
     def run_evolution(self, toolbox) -> None:
         # Runs the evolution process using the genetic algorithm.
-        population = toolbox.population(n=POPULATION_SIZE)
+        population = toolbox.population(n=self.population_size)
         best = tools.HallOfFame(1)
 
         # Set current Temp
-        T = INIT_T
+        T = self.init_t
 
         stats = tools.Statistics(lambda ind: ind.fitness.values)
         stats.register("avg", np.mean)
@@ -122,10 +132,10 @@ class GASpecialistSA:
 
         # Assign a function to the probability if we use SA else use default mutation proability
         mutpb_func = lambda: (
-            self.calculate_mutation_probability_SA(T) if self.SA else MAX_MUTPB
+            self.calculate_mutation_probability_SA(T) if self.sa else self.max_mutpb
         )
 
-        for generation in range(GENERATIONS):
+        for generation in range(self.generations):
             self.evaluate_population(population, toolbox)
 
             # Calculate mutation probability
@@ -148,12 +158,12 @@ class GASpecialistSA:
 
             # Apply cooling scheme
             # Variant used: Exponential
-            T = T * COOLING_RATE
+            T = T * self.cooling_rate
 
         self.save_results(best)
 
     def calculate_mutation_probability_SA(self, T):
-        return MIN_MUTPB + (MAX_MUTPB - MIN_MUTPB) * (T / INIT_T)
+        return self.min_mutpb + (self.max_mutpb - self.min_mutpb) * (T / self.init_t)
 
     def log_initial_population_fitness(self) -> None:
         # Logs the initial population's fitness to a file.
@@ -195,7 +205,7 @@ class GASpecialistSA:
         offspring = list(map(toolbox.clone, offspring))
 
         for child1, child2 in zip(offspring[::2], offspring[1::2]):
-            if random.random() < CROSSOVER_PROBABILITY:
+            if random.random() < self.crossover_probability:
                 toolbox.mate(child1, child2)
                 del child1.fitness.values
                 del child2.fitness.values
@@ -238,8 +248,8 @@ class GASpecialistSA:
             # Run simulation with the best solution for selected enemy.
             best_ind = np.loadtxt(self.experiment_name+f'/enemy_{self.enemy}/best_{best_ind_idx}.txt')
             print("\n Using best solution from memory \n")
-            fitness,player,enemy,game_time = self.env.play(pcont=best_ind)
-            return fitness,player,enemy,game_time
+            fitness, player, enemy, game_time = self.env.play(pcont=best_ind)
+            return fitness, player, enemy, game_time
         else:
             print(f"Invalid mode: {self.mode}")
 
