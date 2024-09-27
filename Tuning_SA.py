@@ -12,15 +12,15 @@ class Tuner:
         self.enemies = enemies
         self.results = []
 
-    def evaluate_params(self, max_mutpb, min_mutpb, cooling_rate, enemy):
+    def evaluate_params(self, max_mutpb, min_mutpb, cooling_rate, enemy, run):
         self.agent.max_mutpb = max_mutpb
         self.agent.min_mutpb = min_mutpb
         self.agent.cooling_rate = cooling_rate
 
-        self.agent.run_experiment(enemy)
+        self.agent.run_experiment(enemy, mode="Tune", run=run, best_ind_idx=0)
 
         # Saves the best fitness
-        file_path = self.agent.experiment_name + f"/best_{enemy}.txt"
+        file_path = self.agent.experiment_name + f"/tune_best_{enemy}.txt"
 
         best_fitness = np.loadtxt(file_path)[0]
 
@@ -30,6 +30,7 @@ class Tuner:
         """Perform grid search across all combinations of parameters"""
         for enemy in self.enemies:
             print(f"\nTuning for enemy {enemy}")
+            i = 0
             for params in ParameterGrid(self.param_grid):
                 print(f"Evaluating params: {params}")
 
@@ -39,6 +40,7 @@ class Tuner:
                     params["min_mutpb"],
                     params["cooling_rate"],
                     enemy,
+                    run = i
                 )
 
                 result = {
@@ -49,6 +51,7 @@ class Tuner:
                     "fitness": fitness,
                 }
                 self.results.append(result)
+                i += 1
 
         # Saving
         results_str = [json.dumps(result) for result in self.results]

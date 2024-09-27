@@ -31,7 +31,7 @@ class GASpecialistSA:
         min_t: float = 1,
         max_mutpb: float = 0.5,
         min_mutpb: float = 0.01,
-        cooling_rate: float = 0.5,
+        cooling_rate: float = 0.99,
     ):
 
         self.headless = headless
@@ -50,6 +50,8 @@ class GASpecialistSA:
 
         self.enemy = 4  # default placeholder
         self.env = ""
+        self.run = 0
+        self.mode = "TRAIN"
         self.sa = sa  # Simulated Annealing enabled or disabled
 
     # Environment Setup
@@ -167,7 +169,7 @@ class GASpecialistSA:
 
     def log_initial_population_fitness(self) -> None:
         # Logs the initial population's fitness to a file.
-        with open(self.experiment_name + "/results.txt", "a") as file_aux:
+        with open(self.experiment_name + f"/{self.mode.lower()}_results.txt", "a") as file_aux:
             file_aux.write(
                 "\n{:<10} {:<10} {:<10} {:<10} ENEMY: {}\n".format(
                     "GENERATION", "BEST", "MEAN", "STD", self.enemy
@@ -192,7 +194,7 @@ class GASpecialistSA:
             f'\n GENERATION {generation} best: {round(best_fitness, 6)} avg: {round(record["avg"], 6)} std: {round(record["std"], 6)} enemy: {self.enemy}'
         )
 
-        with open(self.experiment_name + "/results.txt", "a") as file_aux:
+        with open(self.experiment_name + f"/{self.mode.lower()}_results.txt", "a") as file_aux:
             file_aux.write(
                 f'\n{generation:<10} {best_fitness:<10.6f} {record["avg"]:<10.6f} {record["std"]:<10.6f}'
             )
@@ -226,8 +228,8 @@ class GASpecialistSA:
 
     def save_results(self, best) -> None:
         # Saves the best solution and logs the simulation state.
-        np.savetxt(self.experiment_name + f"/enemy_{self.enemy}/best_{self.run}.txt", best[0])
-        with open(self.experiment_name + f"/enemy_{self.enemy}/best_fitness.txt", "a") as f:
+        np.savetxt(self.experiment_name + f"/enemy_{self.enemy}/{self.mode.lower()}_best_{self.run}.txt", best[0])
+        with open(self.experiment_name + f"/enemy_{self.enemy}/{self.mode.lower()}_best_fitness.txt", "a") as f:
             f.write(f"{self.run}: {best[0].fitness.values[0]}\n")
         print(f"\nBest fitness achieved: {best[0].fitness.values[0]}")
 
@@ -241,7 +243,7 @@ class GASpecialistSA:
         ini = time.time()
         self.env = self.setup_environment(enemy=self.enemy)
 
-        if self.mode == "Train":
+        if self.mode == "Train" or "Tune":
             toolbox = self.setup_deap(self.env)
             self.run_evolution(toolbox)
         elif self.mode == "Test":

@@ -37,10 +37,10 @@ parser.add_argument(
 args = parser.parse_args()
 tuning_sa = args.tune
 
-enemies = [4, 6, 8]
+__enemies = [4, 6, 8]
 
-SA_agent = GASpecialistSA(sa=True)
-Normal_agent = GASpecialistSA(sa=False)
+# SA_agent = GASpecialistSA(sa=True)
+# Normal_agent = GASpecialistSA(sa=False)
 
 
 param_grid = {
@@ -50,10 +50,10 @@ param_grid = {
 }
 
 
-__enemies = [4, 5, 7]
+# __enemies = [4, 5, 7]
 
-SA_agent = GASpecialistSA(SA=True, experiment_name="test_run_group55_SA") # SA agent
-Normal_agent = GASpecialistSA(SA=False, experiment_name="test_run_group55") # Regular agent
+SA_agent = GASpecialistSA(sa=True, experiment_name="test_run_group55_SA") # SA agent
+Normal_agent = GASpecialistSA(sa=False, experiment_name="test_run_group55") # Regular agent
 
 
 def train_agent(
@@ -98,7 +98,7 @@ def train_agent(
             print(f"Agent has {allowed_runs} runs vs {enemy} remaining")
 
         for i in range(passed_runs, max_runs):
-            agent.run_experiment(enemy=enemy, mode="Train", run=i)
+            agent.run_experiment(enemy=enemy, mode="Train", run=i, best_ind_idx=0)
 
             with open(agent.experiment_name + "/trainlog.txt", "r+") as file_aux:
                 write_log = file_aux.readlines()
@@ -152,7 +152,7 @@ def plot_training_results():
     pass
 
 if tuning_sa:
-    tuner = Tuner(SA_agent, param_grid, enemies)
+    tuner = Tuner(SA_agent, param_grid, __enemies)
 
     tuner.tune_parameters()
 else:
