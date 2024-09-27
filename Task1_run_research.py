@@ -8,6 +8,7 @@ from GA_Spec_SA import GASpecialistSA
 import matplotlib
 from Tuning_SA import Tuner
 import argparse
+import os
 
 """
 Steps:
@@ -32,8 +33,6 @@ parser.add_argument(
     help="Set this to True for running parameter tuning for the Simulated Annealing, False for just running the experiment",
 )
 args = parser.parse_args()
-
-
 tuning_sa = args.tune
 
 enemies = [4, 6, 8]
@@ -48,10 +47,78 @@ param_grid = {
     "cooling_rate": [0.93, 0.95, 0.97, 0.99],
 }
 
+
+__enemies = [4, 5, 7]
+
+SA_agent = GASpecialistSA(SA=True, experiment_name="test_run_group55_SA")  # SA agent
+Normal_agent = GASpecialistSA(
+    SA=False, experiment_name="test_run_group55"
+)  # Regular agent
+
+
+def train_agent(
+    agent: GASpecialistSA,
+    enemies: list[int],
+    overwrite: bool = False,
+    max_runs: int = 10,
+):
+
+    current_log = []
+
+    # If there is no train log, create one.
+    if not os.path.exists(agent.experiment_name):
+        os.makedirs(agent.experiment_name)
+
+        with open(agent.experiment_name + "/trainlog.txt", "a") as file_aux:
+            file_aux.write(f"ENEMY RUNS\n")
+            # Create spots for every possible enemy.
+            for i in range(1, 9):
+                file_aux.write(f"{i}: 0\n")
+
+    # Load the train log
+    with open(agent.experiment_name + "/trainlog.txt", "r") as file_aux:
+        temp_log = file_aux.readlines()
+        current_log = list(map(str.split, temp_log[1:]))
+
+    for enemy in enemies:
+
+        if not os.path.exists(agent.experiment_name + f"/enemy_{enemy}"):
+            os.makedirs(agent.experiment_name + f"/enemy_{enemy}")
+
+        passed_runs = int(current_log[enemy][1])
+        allowed_runs = max_runs  # How many runs should the agent have left vs an enemy.
+
+        if (passed_runs == max_runs) & (overwrite == False):
+            # If the agent already has ran 10 times vs an enemy skip it. Unless overwrite
+            print(f"Agent has already ran {max_runs} runs vs {enemy}")
+            continue
+        elif not overwrite:
+            # If the agent has previous runs vs this enemy, run n times till you hit the max.
+            allowed_runs = max_runs - passed_runs
+            print(f"Agent has {max_runs} runs vs {enemy} remaining")
+
+        for i in range(passed_runs, allowed_runs):
+            agent.run_experiment(enemy=enemy, mode="Train", run=i)
+
+            with open(agent.experiment_name + "/trainlog.txt", "r+") as file_aux:
+                write_log = file_aux.readlines()
+                file_aux.seek(0)
+                write_log[enemy] = f"{enemy}: {i+1}\n"
+
+                file_aux.writelines(write_log)
+
+                file_aux.truncate()
+
+
+# TODO: Create Test function (Test agent)
+
+# TODO: Create plots
+
+
 if tuning_sa:
     tuner = Tuner(SA_agent, param_grid, enemies)
 
     tuner.tune_parameters()
 else:
-    for e in enemies:
-        SA_agent.run_experiment(e)
+    for ga_agent in [SA_agent, Normal_agent]:
+        train_agent(ga_agent, __enemies)
