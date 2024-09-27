@@ -25,8 +25,8 @@ CROSSOVER_PROBABILITY = 0.5
 # Simulated Annealing Hyper parameters
 INIT_T = 100  # Starting temp
 MIN_T = 1  # Minimum Temp
-MAX_MUTPB = 0.5  # Max mutation probability
-MIN_MUTPB = 0.01  # Min mutation probability
+MAX_MUTPB = 0.1  # Max mutation probability
+MIN_MUTPB = 0.001  # Min mutation probability
 COOLING_RATE = 0.99  # Cooling Rate
 
 
@@ -217,12 +217,14 @@ class GASpecialistSA:
     def save_results(self, best) -> None:
         # Saves the best solution and logs the simulation state.
         np.savetxt(self.experiment_name + f"/enemy_{self.enemy}/best_{self.run}.txt", best[0])
+        with open(self.experiment_name + f"/enemy_{self.enemy}/best_fitness.txt", "a") as f:
+            f.write(f"{self.run}: {best[0].fitness.values[0]}\n")
         print(f"\nBest fitness achieved: {best[0].fitness.values[0]}")
 
         # Save the simulation state and log state of the environment
         self.env.state_to_log()
 
-    def run_experiment(self, enemy: int, mode: str, run: int):
+    def run_experiment(self, enemy: int, mode: str, run: int, best_ind_idx: int):
         self.enemy = enemy
         self.run = run
         self.mode = mode
@@ -234,7 +236,7 @@ class GASpecialistSA:
             self.run_evolution(toolbox)
         elif self.mode == "Test":
             # Run simulation with the best solution for selected enemy.
-            best_ind = np.loadtxt(self.experiment_name+f'/best_{self.enemy}.txt')
+            best_ind = np.loadtxt(self.experiment_name+f'/enemy_{self.enemy}/best_{best_ind_idx}.txt')
             print("\n Using best solution from memory \n")
             fitness,player,enemy,game_time = self.env.play(pcont=best_ind)
             return fitness,player,enemy,game_time
