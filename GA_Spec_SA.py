@@ -15,7 +15,6 @@ from deap.base import Toolbox
 from evoman.environment import Environment
 from demo_controller import player_controller
 
-<<<<<<< HEAD
 
 class GASpecialistSA:
 
@@ -52,34 +51,6 @@ class GASpecialistSA:
         self.enemy = 4  # default placeholder
         self.env = ""
         self.sa = sa  # Simulated Annealing enabled or disabled
-=======
-HEADLESS = True
-EXPERIMENT_NAME = "optimization_specialist_SA_group55"
-N_HIDDEN_NEURONS = 10
-POPULATION_SIZE = 100
-GENERATIONS = 50
-CROSSOVER_PROBABILITY = 0.5
-
-# Simulated Annealing Hyper parameters
-INIT_T = 100  # Starting temp
-MIN_T = 1  # Minimum Temp
-MAX_MUTPB = 0.5  # Max mutation probability
-MIN_MUTPB = 0.01  # Min mutation probability
-COOLING_RATE = 0.99  # Cooling Rate
-
-
-class GASpecialistSA:
-    def __init__(self, SA: bool = False,
-                 experiment_name: str = EXPERIMENT_NAME):
-        self.enemy = 4  # default placeholder
-        self.env = ""
-        self.SA = SA  # Simulated Annealing enabled or disabled
-        self.mode = "Train"
-        self.experiment_name = experiment_name
-        self.run = 0
-
-    # TODO: wipe results.txt on init
->>>>>>> 3234c593c0dae95e9133b0afe47c932952a1db02
 
     # Environment Setup
     def setup_environment(self, enemy: int) -> Environment:
@@ -255,11 +226,9 @@ class GASpecialistSA:
 
     def save_results(self, best) -> None:
         # Saves the best solution and logs the simulation state.
-<<<<<<< HEAD
-        np.savetxt(self.experiment_name + f"/best_{self.enemy}.txt", best[0])
-=======
-        np.savetxt(self.experiment_name + f"/enemy_{self.enemy}/best_{self.run}.txt", best[0])
->>>>>>> 3234c593c0dae95e9133b0afe47c932952a1db02
+        np.savetxt(
+            self.experiment_name + f"/enemy_{self.enemy}/best_{self.run}.txt", best[0]
+        )
         print(f"\nBest fitness achieved: {best[0].fitness.values[0]}")
 
         # Save the simulation state and log state of the environment
@@ -277,10 +246,10 @@ class GASpecialistSA:
             self.run_evolution(toolbox)
         elif self.mode == "Test":
             # Run simulation with the best solution for selected enemy.
-            best_ind = np.loadtxt(self.experiment_name+f'/best_{self.enemy}.txt')
+            best_ind = np.loadtxt(self.experiment_name + f"/best_{self.enemy}.txt")
             print("\n Using best solution from memory \n")
-            fitness,player,enemy,game_time = self.env.play(pcont=best_ind)
-            return fitness,player,enemy,game_time
+            fitness, player, enemy, game_time = self.env.play(pcont=best_ind)
+            return fitness, player, enemy, game_time
         else:
             print(f"Invalid mode: {self.mode}")
 

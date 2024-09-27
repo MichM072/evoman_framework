@@ -42,9 +42,9 @@ Normal_agent = GASpecialistSA(sa=False)
 
 
 param_grid = {
-    "max_mutpb": [0.3, 0.5, 0.7, 0.9],
-    "min_mutpb": [0.01, 0.05, 0.07, 0.1],
-    "cooling_rate": [0.93, 0.95, 0.97, 0.99],
+    "max_mutpb": [0.7, 0.9],  # 0.3, 0.5,
+    "min_mutpb": [0.01, 0.05],  # , 0.07, 0.1
+    "cooling_rate": [0.97, 0.99],  # 0.93, 0.95,
 }
 
 
