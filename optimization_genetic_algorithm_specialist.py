@@ -58,8 +58,8 @@ def initialize_deap_toolbox(n_vars, env):
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     toolbox.register("evaluate", evaluate_individual, env)
-    toolbox.register("mate", tools.cxTwoPoint)
-    toolbox.register("mutate", tools.mutFlipBit, indpb=0.2)
+    toolbox.register("mate", tools.cxBlend)
+    toolbox.register("mutate", tools.mutGaussian, indpb=0.2)
     toolbox.register("select", tools.selTournament, tournsize=3)
 
     return toolbox
