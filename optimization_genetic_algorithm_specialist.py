@@ -64,6 +64,11 @@ def initialize_deap_toolbox(n_vars, env):
 
     return toolbox
 
+def normalize_value(value, data_population):
+    value_range = np.ptp(data_population)  # using numpy for simplicity (max-min)
+    normalized_value = (value - np.min(data_population)) / value_range if value_range > 0 else 0
+
+    return max(normalized_value, 1e-10)
 
 def evaluate_individual(env, individual):
     return simulate_environment(env, individual),
@@ -112,8 +117,11 @@ def elitism(group, elitism_rate):
     return sorted_group[:num_elite]
 
 
+def get_fitness_value(individual):
+    return individual.fitness.values[0]
+
 def remove_least_performers(group, num_individuals_to_remove):
-    sorted_group = sorted(group, key=lambda x: x.fitness.values[0])
+    sorted_group = sorted(group, key=get_fitness_value)
     return sorted_group[num_individuals_to_remove:]
 
 
