@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import os
 import glob
 
-ENEMY = "8"
+ENEMY = "2"
 
 # Function to read and process files
 def process_files(file_pattern):
@@ -11,25 +11,17 @@ def process_files(file_pattern):
     all_avg_values = []
 
     for filename in glob.glob(file_pattern):
-        # Read the file and parse the data
-        with open(filename, 'r') as file:
-            lines = file.readlines()
-            generations = []
+        # Read the CSV file into a DataFrame
+        df = pd.read_csv(filename)
 
-            for line in lines:
-                # Check for lines containing "Generation"
-                if 'Generation' in line:
-                    parts = line.split(':')
-                    if len(parts) > 1:
-                        generation_data = parts[1].strip().split()
-                        max_value = float(generation_data[1])
-                        avg_value = float(generation_data[3])
-
-                        generations.append((max_value, avg_value))
-
-            max_values, avg_values = zip(*generations)  # Unzip into separate lists
+        # Ensure that the required columns are present
+        if 'Max' in df.columns and 'Avg' in df.columns:
+            max_values = df['Max'].tolist()
+            avg_values = df['Avg'].tolist()
             all_max_values.append(max_values)
             all_avg_values.append(avg_values)
+        else:
+            print(f"File {filename} is missing required columns.")
 
     # Check if we collected any data
     if not all_max_values or not all_avg_values:
@@ -45,10 +37,10 @@ def process_files(file_pattern):
     return avg_max, std_max, avg_avg, std_avg
 
 
-# Define the folder path and file patterns
+# Define the folder path and file patterns for the new CSV files
 folder_path = 'train_run_enemy' + ENEMY
-ga_files_pattern = os.path.join(folder_path, 'GA_train_run*_enemy' + ENEMY + '/results_GA_train_run*_enemy' + ENEMY + '.txt')
-sa_files_pattern = os.path.join(folder_path, 'GA_SA_train_run*_enemy' + ENEMY + '/results_GA_SA_train_run*_enemy' + ENEMY + '.txt')
+ga_files_pattern = os.path.join(folder_path, 'GA_train_run*_enemy' + ENEMY + '/results_ga.csv')
+sa_files_pattern = os.path.join(folder_path, 'GA_SA_train_run*_enemy' + ENEMY + '/results_ga_sa.csv')
 
 # Process the files
 try:
@@ -56,7 +48,7 @@ try:
     avg_max_sa, std_max_sa, avg_avg_sa, std_avg_sa = process_files(sa_files_pattern)
 
     # Generations (X-axis)
-    generations = list(range(31))  # 0 to 30
+    generations = list(range(len(avg_max_ga)))  # Assuming both GA and SA have the same number of generations
 
     # Create plots
     plt.figure(figsize=(12, 6))
@@ -88,7 +80,7 @@ try:
                      color='peachpuff', alpha=0.2)
 
     # Set x and y limits, labels, title, and legend
-    plt.xlim(0, 30)
+    plt.xlim(0, len(generations) - 1)
     plt.ylim(0, 100)
     plt.xlabel('Generations', fontsize=16)
     plt.ylabel('Fitness', fontsize=16)

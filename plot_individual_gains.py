@@ -1,5 +1,5 @@
 import os
-import re
+import csv
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import mannwhitneyu, shapiro
@@ -11,23 +11,27 @@ test_runs = 5
 
 # Folders and filenames for the experiments
 folders = ["test_run_enemy2", "test_run_enemy4", "test_run_enemy8"]
-file_names = ["results_test.txt", "results_test_sa.txt"]
+file_names = ["results_test.csv", "results_test_sa.csv"]
 
 
-# Function to extract individual gains from a file
+# Function to extract individual gains from a CSV file
 def extract_individual_gains(file_path):
     individual_gains = []
     with open(file_path, 'r') as file:
-        for line in file:
-            match = re.search(r"Individual Gain = ([\d\.\-e]+)", line)
-            if match:
-                individual_gains.append(float(match.group(1)))
+        reader = csv.reader(file)
+        next(reader)  # Skip header
+        for row in reader:
+            if len(row) > 1 and row[1].strip():  # Ensure there's a gain value
+                try:
+                    individual_gains.append(float(row[1]))
+                except ValueError:
+                    continue
     return individual_gains
 
 
 # Calculate the mean individual gain
 def calculate_individual_gain_mean(data):
-    return [sum(ind) / len(ind) for ind in data]
+    return [sum(ind) / len(ind) for ind in data if len(ind) > 0]  # Ensure no empty lists
 
 
 # Store the extracted data
@@ -42,8 +46,15 @@ for folder in folders:
         ea1_path = os.path.join(base_dir, best_folder, file_names[0])
         ea2_path = os.path.join(base_dir, best_folder, file_names[1])
 
-        ea1_best_gains.append(extract_individual_gains(ea1_path))
-        ea2_best_gains.append(extract_individual_gains(ea2_path))
+        if os.path.exists(ea1_path):
+            ea1_best_gains.append(extract_individual_gains(ea1_path))
+        else:
+            print(f"File not found: {ea1_path}")
+
+        if os.path.exists(ea2_path):
+            ea2_best_gains.append(extract_individual_gains(ea2_path))
+        else:
+            print(f"File not found: {ea2_path}")
 
     # Store mean gains for both EA1 and EA2
     data[f"{folder}_EA1"] = calculate_individual_gain_mean(ea1_best_gains)
@@ -79,7 +90,8 @@ for i in range(0, len(boxplot_data), 2):
     mean_ea2 = np.mean(boxplot_data[i + 1])
     std_ea1 = np.std(boxplot_data[i])
     std_ea2 = np.std(boxplot_data[i + 1])
-    print(f"{labels[i]}: Mean = {mean_ea1:.3f}, Std = {std_ea1:.3f}, {labels[i + 1]}: Mean = {mean_ea2:.3f}, Std = {std_ea2:.3f}")
+    print(
+        f"{labels[i]}: Mean = {mean_ea1:.3f}, Std = {std_ea1:.3f}, {labels[i + 1]}: Mean = {mean_ea2:.3f}, Std = {std_ea2:.3f}")
 
 # Display p-values on the plot
 for idx, (x1, x2) in enumerate(comparisons):
@@ -100,6 +112,7 @@ plt.yticks(fontsize=12)
 # Show the plot
 plt.show()
 
+# Perform Shapiro-Wilk test for normality
 shapiro_p_values = {}
 for idx, dataset in enumerate(boxplot_data):
     stat, p_value = shapiro(dataset)
