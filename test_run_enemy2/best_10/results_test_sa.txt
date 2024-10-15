@@ -1,0 +1,9 @@
+Results for Enemy 2 using best_sa.txt:
+Run 1: Individual Gain = 80
+Run 2: Individual Gain = 84
+Run 3: Individual Gain = 84
+Run 4: Individual Gain = 84
+Run 5: Individual Gain = 80
+Average Individual Gain: 82.4
+Standard Deviation: 1.9595917942265424
+
