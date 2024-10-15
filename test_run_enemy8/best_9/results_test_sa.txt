@@ -1,0 +1,9 @@
+Results for Enemy 8 using best_sa.txt:
+Run 1: Individual Gain = -40.0
+Run 2: Individual Gain = -40.0
+Run 3: Individual Gain = -40.0
+Run 4: Individual Gain = -40.0
+Run 5: Individual Gain = -30.0
+Average Individual Gain: -38.0
+Standard Deviation: 4.0
+

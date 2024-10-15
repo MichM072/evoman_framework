@@ -1,0 +1,9 @@
+Results for Enemy 4 using best.txt:
+Run 1: Individual Gain = 52.00000000000031
+Run 2: Individual Gain = 50.20000000000031
+Run 3: Individual Gain = 52.00000000000031
+Run 4: Individual Gain = 52.00000000000031
+Run 5: Individual Gain = 50.20000000000031
+Average Individual Gain: 51.280000000000314
+Standard Deviation: 0.8818163074019463
+
