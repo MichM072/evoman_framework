@@ -12,12 +12,12 @@ os.environ["SDL_VIDEODRIVER"] = "dummy"
 N_HIDDEN_NEURONS = 10
 N_POPULATION = 100
 N_GENERATIONS = 30
-MUTATION_PROBABILITY = 0.1
+MUTATION_PROBABILITY = 0.05
 CROSSOVER_PROBABILITY = 0.9
 NUM_GENERATIONS_WITHOUT_GROWTH = 5  # Threshold for stagnation
 ELITISM_RATE = 0.2  # Percentage of best to keep
 N_LEAST_PERFORMING = 5  # Remove num of ind that are performing very bad
-ENEMIES = [2, 4, 8]
+ENEMY_GROUPS = [[2,5,6], [5,7,8]] #TODO: Change default values
 TRAIN_RUNS = 10
 TEST_RUNS = 5
 
@@ -29,10 +29,11 @@ Group_A = []
 Group_B = []
 
 
-def create_environment(n_hidden_neurons, experiment_name, enemy):
+def create_environment(n_hidden_neurons, experiment_name, enemies):
     return Environment(
         experiment_name=experiment_name,
-        enemies=[enemy],
+        enemies=enemies,
+        multiplemode="yes", # THIS MUST REMAIN YES
         playermode="ai",
         player_controller=player_controller(n_hidden_neurons),
         enemymode="static",
@@ -67,6 +68,11 @@ def initialize_deap_toolbox(n_vars, env):
 def evaluate_individual(env, individual):
     return simulate_environment(env, individual),
 
+def evaluate_invalid_individuals(toolbox, invalid_individuals):
+    fitnesses = map(toolbox.evaluate, invalid_individuals)
+    for ind, fit in zip(invalid_individuals, fitnesses):
+        ind.fitness.values = fit  # Assign the fitness values
+
 
 def simulate_environment(env, individual):
     fitness, _, _, _ = env.play(pcont=individual)
@@ -86,9 +92,18 @@ def increase_mutation_rate(mutation_rate):
 
 def crossover_and_mutate(group_1, group_2, toolbox, mutation_rate):
     for ind1, ind2 in zip(group_1[:len(group_1) // 2], group_2[:len(group_2) // 2]):
-        toolbox.mate(ind1, ind2)
-        toolbox.mutate(ind1)
-        toolbox.mutate(ind2)
+        if np.random.rand() < CROSSOVER_PROBABILITY:
+            toolbox.mate(ind1, ind2)
+        if np.random.rand() < mutation_rate:
+            toolbox.mutate(ind1)
+            toolbox.mutate(ind2)
+
+        # Evaluate the individuals with an invalid fitness
+        invalid_ind = [ind for ind in [ind1, ind2] if not ind.fitness.valid]
+        fitnesses = map(toolbox.evaluate, invalid_ind)
+
+        for ind, fit in zip(invalid_ind, fitnesses):
+            ind.fitness.values = fit
 
 
 def elitism(group, elitism_rate):
@@ -117,20 +132,25 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_
     invalid_individuals_B = [ind for ind in Group_B if not ind.fitness.valid]
 
     if invalid_individuals_A:
-        fitnesses_A = map(toolbox.evaluate, invalid_individuals_A)
-        for ind, fit in zip(invalid_individuals_A, fitnesses_A):
-            ind.fitness.values = fit  # Assign the fitness values
+        evaluate_invalid_individuals(toolbox, invalid_individuals_A)
 
     if invalid_individuals_B:
-        fitnesses_B = map(toolbox.evaluate, invalid_individuals_B)
-        for ind, fit in zip(invalid_individuals_B, fitnesses_B):
-            ind.fitness.values = fit  # Assign the fitness values
+        evaluate_invalid_individuals(toolbox, invalid_individuals_B)
+    # if invalid_individuals_A:
+    #     fitnesses_A = map(toolbox.evaluate, invalid_individuals_A)
+    #     for ind, fit in zip(invalid_individuals_A, fitnesses_A):
+    #         ind.fitness.values = fit  # Assign the fitness values
+    #
+    # if invalid_individuals_B:
+    #     fitnesses_B = map(toolbox.evaluate, invalid_individuals_B)
+    #     for ind, fit in zip(invalid_individuals_B, fitnesses_B):
+    #         ind.fitness.values = fit  # Assign the fitness values
 
-    if not check_significant_growth(Group_A, history_A) and Group_A:
-        mutation_rate_A = increase_mutation_rate(mutation_rate_A)
-
-    if not check_significant_growth(Group_B, history_B) and Group_B:
-        mutation_rate_B = increase_mutation_rate(mutation_rate_B)
+    # if not check_significant_growth(Group_A, history_A) and Group_A:
+    #     mutation_rate_A = increase_mutation_rate(mutation_rate_A)
+    #
+    # if not check_significant_growth(Group_B, history_B) and Group_B:
+    #     mutation_rate_B = increase_mutation_rate(mutation_rate_B)
 
     if Group_A and Group_B:  # Only perform crossover if both groups are non-empty
         crossover_and_mutate(Group_A, Group_B, toolbox, mutation_rate_A)
@@ -155,6 +175,7 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_
     Group_B = remove_least_performers(Group_B, N_LEAST_PERFORMING) if Group_B else Group_B
 
     # Reproduce
+    # TODO: Check if this logic holds, we flood group_B with individuals that might not even belong there.
     if Group_A:
         Group_A += toolbox.population(n=N_POPULATION - len(Group_A))
     if Group_B:
@@ -162,22 +183,68 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_
 
     return Group_A, Group_B
 
+def evolve_population_EA2(pop, toolbox, history_pop, mutation_rate):
+    invalid_individuals = [ind for ind in pop if not ind.fitness.valid]
 
-def train_ea1(i, enemy):
-    experiment_name = f'train_run_enemy{enemy}/EA1_train_run{i + 1}_enemy{enemy}'
+    if invalid_individuals:
+        fitnesses = map(toolbox.evaluate, invalid_individuals)
+        for ind, fit in zip(invalid_individuals, fitnesses):
+            ind.fitness.values = fit  # Assign the fitness values
+
+    if not check_significant_growth(pop, history_pop) and pop:
+        mutation_rate = increase_mutation_rate(mutation_rate)
+
+    if pop:  # Only perform crossover if population is not empty
+        offspring = list(map(toolbox.clone, pop))
+
+        # Apply crossover and mutation
+        for child1, child2 in zip(offspring[::2], offspring[1::2]):
+            if np.random.rand() < CROSSOVER_PROBABILITY:
+                toolbox.mate(child1, child2)
+                del child1.fitness.values
+                del child2.fitness.values
+
+        for mutant in offspring:
+            if np.random.rand() < mutation_rate:
+                toolbox.mutate(mutant)
+                del mutant.fitness.values
+
+        # Evaluate the individuals with an invalid fitness
+        invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+        fitnesses = map(toolbox.evaluate, invalid_ind)
+
+        for ind, fit in zip(invalid_ind, fitnesses):
+            ind.fitness.values = fit
+
+        # Replace population with offspring
+        pop[:] = offspring
+
+    pop = elitism(pop, ELITISM_RATE) if pop else pop
+
+    pop = remove_least_performers(pop, N_LEAST_PERFORMING) if pop else pop
+
+    # Reproduce
+    if pop:
+        pop += toolbox.population(n=N_POPULATION - len(pop))
+
+    return pop
+
+
+def train_ea1(i, enemies):
+    experiment_name = f'train_run_enemy{enemies}/EA1_train_run{i + 1}_enemy{enemies}'
     if not os.path.exists(experiment_name):
         os.makedirs(experiment_name)
 
-    env = create_environment(N_HIDDEN_NEURONS, experiment_name, enemy)
+    env = create_environment(N_HIDDEN_NEURONS, experiment_name, enemies)
     n_vars = calculate_n_vars(env)
     toolbox = initialize_deap_toolbox(n_vars, env)
 
     # Initialize A and B
     Group_A = toolbox.population(n=N_POPULATION)
-    Group_B = toolbox.population(n=N_POPULATION)
+    # Group_B = toolbox.population(n=N_POPULATION)
 
     mutation_rate_A = MUTATION_PROBABILITY
-    mutation_rate_B = MUTATION_PROBABILITY
+    mutation_rate_B = 0.1
     history_A, history_B = [], []
 
     for generation in range(N_GENERATIONS):
@@ -197,9 +264,34 @@ def train_ea1(i, enemy):
     save_best_solution(Group_B[0], experiment_name, 'best_B.txt')
 
 
+
 # Placeholder for EA2 (not implemented yet)
-def train_ea2(i, enemy):
-    pass
+def train_ea2(i, enemies):
+    experiment_name = f'train_run_enemy{enemies}/EA2_train_run{i + 1}_enemy{enemies}'
+    if not os.path.exists(experiment_name):
+        os.makedirs(experiment_name)
+
+    env = create_environment(N_HIDDEN_NEURONS, experiment_name, enemies)
+    n_vars = calculate_n_vars(env)
+    toolbox = initialize_deap_toolbox(n_vars, env)
+
+    # Initialize population
+    pop = toolbox.population(n=N_POPULATION)
+
+    mutation_rate = MUTATION_PROBABILITY
+    history = []
+
+    for generation in range(N_GENERATIONS):
+        pop = evolve_population_EA2(pop, toolbox, history, mutation_rate,)
+
+        # Are individuals valid? Check!
+        best = max(ind.fitness.values[0] for ind in pop if ind.fitness.valid)
+
+        history.append(best)
+
+        print(f"Generation {generation}: Best: {best}")
+
+    save_best_solution(pop[0], experiment_name, 'best_A.txt')
 
 
 def test_best_solution(enemy, i, test_experiment, env, best_solution_path, file_suffix):
@@ -244,20 +336,19 @@ def calculate_n_vars(env):
 
 if __name__ == "__main__":
     if MODE == MODE_TRAIN:
-        for enemy in ENEMIES:
-            print(f"Training EA1 for Enemy {enemy}...")
+        for enemy_group in ENEMY_GROUPS:
+            print(f"Training EA1 for group: {enemy_group}...")
 
             with mp.Pool(processes=os.cpu_count()) as pool:
-                pool.starmap(train_ea1, [(i, enemy) for i in range(TRAIN_RUNS)])
+                pool.starmap(train_ea1, [(i, enemy_group) for i in range(TRAIN_RUNS)])
 
-            # print(f"Training EA2 for Enemy {enemy}...")
+            print(f"Training EA2 for group: {enemy_group}...")
 
-            # Placeholder for EA2; currently does nothing
-            # with mp.Pool(processes=os.cpu_count()) as pool:
-            #     pool.starmap(train_ea2, [(i, enemy) for i in range(TRAIN_RUNS)])
+            with mp.Pool(processes=os.cpu_count()) as pool:
+                pool.starmap(train_ea2, [(i, enemy_group) for i in range(TRAIN_RUNS)])
 
     elif MODE == MODE_TEST:
-        for enemy in ENEMIES:
+        for enemy in ENEMY_GROUPS:
             for i in range(1, TRAIN_RUNS + 1):
 
                 print(f"Testing enemy {enemy}")
