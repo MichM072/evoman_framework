@@ -1,13 +1,11 @@
 import os
 import csv
-import sys
 import numpy as np
 import multiprocessing as mp
 from deap import base, creator, tools, algorithms
 from evoman.environment import Environment
 from demo_controller import player_controller
 
-# Set headless mode to speed up simulations
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 # Constants and configurations
@@ -16,14 +14,19 @@ N_POPULATION = 100
 N_GENERATIONS = 30
 MUTATION_PROBABILITY = 0.1
 CROSSOVER_PROBABILITY = 0.9
-COOLING_RATE = 0.05
+NUM_GENERATIONS_WITHOUT_GROWTH = 5  # Threshold for stagnation
+ELITISM_RATE = 0.2  # Percentage of best to keep
+N_LEAST_PERFORMING = 5  # Remove num of ind that are performing very bad
 ENEMIES = [2, 4, 8]
 TRAIN_RUNS = 10
 TEST_RUNS = 5
 
 MODE_TRAIN = 'Train'
 MODE_TEST = 'Test'
-MODE = MODE_TEST  # 'Train' or 'Test'
+MODE = MODE_TRAIN  #'Train' or 'Test' based on your needs
+
+Group_A = []
+Group_B = []
 
 
 def create_environment(n_hidden_neurons, experiment_name, enemy):
@@ -41,8 +44,12 @@ def create_environment(n_hidden_neurons, experiment_name, enemy):
 
 
 def initialize_deap_toolbox(n_vars, env):
-    creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-    creator.create("Individual", np.ndarray, fitness=creator.FitnessMax)
+    # Avoid annoying warning
+    if 'FitnessMax' not in creator.__dict__:
+        creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+
+    if 'Individual' not in creator.__dict__:
+        creator.create("Individual", np.ndarray, fitness=creator.FitnessMax)
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", np.random.uniform, -1, 1)
@@ -66,139 +73,136 @@ def simulate_environment(env, individual):
     return fitness
 
 
-def custom_similar(ind1, ind2):
-    """Custom similarity function for Hall of Fame comparison."""
-    return np.array_equal(ind1, ind2)
+def check_significant_growth(group, history, threshold=NUM_GENERATIONS_WITHOUT_GROWTH):
+    if len(history) < threshold:
+        return True  #Cannot judge if not enough info
+
+    return np.mean(history[-threshold:]) > np.mean(history[-2 * threshold:-threshold]) # TODO: make this more readable pls
 
 
-def run_ea_ga(toolbox, experiment_name, env):
-    """Run the Genetic Algorithm (EA1) without simulated annealing."""
-    population = toolbox.population(n=N_POPULATION)
-    hof = tools.HallOfFame(1, similar=custom_similar)
-
-    stats = tools.Statistics(lambda ind: ind.fitness.values[0])
-    stats.register("avg", np.mean)
-    stats.register("std", np.std)
-    stats.register("min", np.min)
-    stats.register("max", np.max)
-
-    population, log = algorithms.eaSimple(
-        population, toolbox, cxpb=CROSSOVER_PROBABILITY, mutpb=MUTATION_PROBABILITY,
-        ngen=N_GENERATIONS, stats=stats, halloffame=hof, verbose=True
-    )
-
-    save_best_solution(hof[0], experiment_name, 'best.txt')
-    log_results_to_csv(log, experiment_name, 'results_ga.csv')
-    env.update_solutions([population, [ind.fitness.values[0] for ind in population]])
-    env.save_state()
-
-    # print(f"Best individual (GA): {hof[0]}")
+def increase_mutation_rate(mutation_rate):
+    return min(1.0, mutation_rate * 1.1)  ## TODO: What is the min? Is 1.0 ok?
 
 
-def run_ea_ga_sa(toolbox, experiment_name, env):
-    """Run the Genetic Algorithm with Simulated Annealing (EA2)."""
-    population = toolbox.population(n=N_POPULATION)
-    hof = tools.HallOfFame(1, similar=custom_similar)
-
-    stats = tools.Statistics(lambda ind: ind.fitness.values[0])
-    stats.register("avg", np.mean)
-    stats.register("std", np.std)
-    stats.register("min", np.min)
-    stats.register("max", np.max)
-
-    log_file_path = f"{experiment_name}/results_ga_sa.csv"
-
-    with open(log_file_path, 'w', newline='') as log_file:
-        csv_writer = csv.writer(log_file)
-        csv_writer.writerow(['Generation', 'Max', 'Avg', 'Std', 'Min'])
-
-        for gen in range(N_GENERATIONS + 1):
-            dynamic_mutpb = MUTATION_PROBABILITY * np.exp(-COOLING_RATE * gen)
-
-            # Apply genetic algorithm steps manually to include custom mutation probability
-            offspring = toolbox.select(population, len(population))
-            offspring = list(map(toolbox.clone, offspring))
-
-            # Crossover and mutation
-            for child1, child2 in zip(offspring[::2], offspring[1::2]):
-                if np.random.rand() < CROSSOVER_PROBABILITY:
-                    toolbox.mate(child1, child2)
-                    del child1.fitness.values
-                    del child2.fitness.values
-
-            for mutant in offspring:
-                if np.random.rand() < dynamic_mutpb:
-                    toolbox.mutate(mutant)
-                    del mutant.fitness.values
-
-            # Evaluate individuals with invalid fitness
-            invalid_individuals = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = map(toolbox.evaluate, invalid_individuals)
-            for ind, fit in zip(invalid_individuals, fitnesses):
-                ind.fitness.values = fit
-
-            population[:] = offspring
-            hof.update(population)
-
-            record = stats.compile(population)
-            log_generation_to_csv(csv_writer, gen, record)
-
-    save_best_solution(hof[0], experiment_name, 'best_sa.txt')
-    env.update_solutions([population, [ind.fitness.values[0] for ind in population]])
-    env.save_state()
-
-    # print(f"Best individual (GA+SA): {hof[0]}")
+def crossover_and_mutate(group_1, group_2, toolbox, mutation_rate):
+    for ind1, ind2 in zip(group_1[:len(group_1) // 2], group_2[:len(group_2) // 2]):
+        toolbox.mate(ind1, ind2)
+        toolbox.mutate(ind1)
+        toolbox.mutate(ind2)
 
 
-def log_generation_to_csv(csv_writer, generation, record):
-    csv_writer.writerow([generation, record['max'], record['avg'], record['std'], record['min']])
-    # print(f"Generation {generation}: Max {record['max']} Avg {record['avg']} Std {record['std']} Min {record['min']}")
+def elitism(group, elitism_rate):
+    num_elite = int(len(group) * elitism_rate)
+    sorted_group = sorted(group, key=lambda x: x.fitness.values[0], reverse=True)
+    return sorted_group[:num_elite]
 
 
-def save_best_solution(solution, experiment_name, file_name):
-    np.savetxt(f'{experiment_name}/{file_name}', solution)
+def remove_least_performers(group, num_individuals_to_remove):
+    sorted_group = sorted(group, key=lambda x: x.fitness.values[0])
+    return sorted_group[num_individuals_to_remove:]
 
 
-def log_results_to_csv(log, experiment_name, file_name):
-    with open(f'{experiment_name}/{file_name}', 'w', newline='') as file:
-        csv_writer = csv.writer(file)
-        csv_writer.writerow(['Generation', 'Max', 'Avg', 'Std', 'Min'])
-        for generation in log:
-            csv_writer.writerow(
-                [generation['gen'], generation['max'], generation['avg'], generation['std'], generation['min']])
+def move_to_group_B(individual, Group_A, Group_B):
+    # Group_A = [ind for ind in Group_A if not np.array_equal(ind, individual)]
+    Group_B.append(individual)
 
 
-def train_ga(i, enemy):
-    """Train using the basic Genetic Algorithm (EA1)."""
-    experiment_name = f'train_run_enemy{enemy}/GA_train_run{i + 1}_enemy{enemy}'
+def move_to_group_A(individual, Group_A, Group_B):
+    # Group_B = [ind for ind in Group_B if not np.array_equal(ind, individual)]
+    Group_A.append(individual)
+
+
+def evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_rate_A, mutation_rate_B):
+    invalid_individuals_A = [ind for ind in Group_A if not ind.fitness.valid]
+    invalid_individuals_B = [ind for ind in Group_B if not ind.fitness.valid]
+
+    if invalid_individuals_A:
+        fitnesses_A = map(toolbox.evaluate, invalid_individuals_A)
+        for ind, fit in zip(invalid_individuals_A, fitnesses_A):
+            ind.fitness.values = fit  # Assign the fitness values
+
+    if invalid_individuals_B:
+        fitnesses_B = map(toolbox.evaluate, invalid_individuals_B)
+        for ind, fit in zip(invalid_individuals_B, fitnesses_B):
+            ind.fitness.values = fit  # Assign the fitness values
+
+    if not check_significant_growth(Group_A, history_A) and Group_A:
+        mutation_rate_A = increase_mutation_rate(mutation_rate_A)
+
+    if not check_significant_growth(Group_B, history_B) and Group_B:
+        mutation_rate_B = increase_mutation_rate(mutation_rate_B)
+
+    if Group_A and Group_B:  # Only perform crossover if both groups are non-empty
+        crossover_and_mutate(Group_A, Group_B, toolbox, mutation_rate_A)
+        crossover_and_mutate(Group_B, Group_A, toolbox, mutation_rate_B)
+
+    if Group_A:  # Ensure Group_A is not empty
+        avg_fitness_A = np.mean([i.fitness.values[0] for i in Group_A]) if Group_A else 0
+        for ind in Group_A:
+            if ind.fitness.values[0] < avg_fitness_A:
+                move_to_group_B(ind, Group_A, Group_B)
+
+    if Group_B:  # Ensure Group_B is not empty
+        avg_fitness_B = np.mean([i.fitness.values[0] for i in Group_B]) if Group_B else 0
+        for ind in Group_B:
+            if ind.fitness.values[0] > avg_fitness_B:
+                move_to_group_A(ind, Group_A, Group_B)
+
+    Group_A = elitism(Group_A, ELITISM_RATE) if Group_A else Group_A
+    Group_B = elitism(Group_B, ELITISM_RATE) if Group_B else Group_B
+
+    Group_A = remove_least_performers(Group_A, N_LEAST_PERFORMING) if Group_A else Group_A
+    Group_B = remove_least_performers(Group_B, N_LEAST_PERFORMING) if Group_B else Group_B
+
+    # Reproduce
+    if Group_A:
+        Group_A += toolbox.population(n=N_POPULATION - len(Group_A))
+    if Group_B:
+        Group_B += toolbox.population(n=N_POPULATION - len(Group_B))
+
+    return Group_A, Group_B
+
+
+def train_ea1(i, enemy):
+    experiment_name = f'train_run_enemy{enemy}/EA1_train_run{i + 1}_enemy{enemy}'
     if not os.path.exists(experiment_name):
         os.makedirs(experiment_name)
 
     env = create_environment(N_HIDDEN_NEURONS, experiment_name, enemy)
     n_vars = calculate_n_vars(env)
     toolbox = initialize_deap_toolbox(n_vars, env)
-    run_ea_ga(toolbox, experiment_name, env)
+
+    # Initialize A and B
+    Group_A = toolbox.population(n=N_POPULATION)
+    Group_B = toolbox.population(n=N_POPULATION)
+
+    mutation_rate_A = MUTATION_PROBABILITY
+    mutation_rate_B = MUTATION_PROBABILITY
+    history_A, history_B = [], []
+
+    for generation in range(N_GENERATIONS):
+        Group_A, Group_B = evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_rate_A,
+                                             mutation_rate_B)
+
+        # Are individuals valid? Check!
+        best_A = max(ind.fitness.values[0] for ind in Group_A if ind.fitness.valid)
+        best_B = max(ind.fitness.values[0] for ind in Group_B if ind.fitness.valid)
+
+        history_A.append(best_A)
+        history_B.append(best_B)
+
+        print(f"Generation {generation}: Best A: {best_A}, Best B: {best_B}")
+
+    save_best_solution(Group_A[0], experiment_name, 'best_A.txt')
+    save_best_solution(Group_B[0], experiment_name, 'best_B.txt')
 
 
-def train_ga_sa(i, enemy):
-    """Train using the Genetic Algorithm with Simulated Annealing (EA2)."""
-    experiment_name = f'train_run_enemy{enemy}/GA_SA_train_run{i + 1}_enemy{enemy}'
-    if not os.path.exists(experiment_name):
-        os.makedirs(experiment_name)
-
-    env = create_environment(N_HIDDEN_NEURONS, experiment_name, enemy)
-    n_vars = calculate_n_vars(env)
-    toolbox = initialize_deap_toolbox(n_vars, env)
-    run_ea_ga_sa(toolbox, experiment_name, env)
-
-
-def calculate_n_vars(env):
-    """Calculate the number of variables for the neural network."""
-    return (env.get_num_sensors() + 1) * N_HIDDEN_NEURONS + (N_HIDDEN_NEURONS + 1) * 5
+# Placeholder for EA2 (not implemented yet)
+def train_ea2(i, enemy):
+    pass
 
 
 def test_best_solution(enemy, i, test_experiment, env, best_solution_path, file_suffix):
-    """Test the saved best solution."""
     try:
         best_solution = np.loadtxt(best_solution_path)
     except IOError:
@@ -230,37 +234,45 @@ def test_best_solution(enemy, i, test_experiment, env, best_solution_path, file_
         csv_writer.writerow(['Standard Deviation', std_gain])
 
 
-def test_ga(enemy, i):
-    """Test the Genetic Algorithm (GA) and GA+SA solutions."""
-    test_experiment = f'test_run_enemy{enemy}/best_{i}'
-    path_train = f'train_run_enemy{enemy}'
-    if not os.path.exists(test_experiment):
-        os.makedirs(test_experiment)
+def save_best_solution(solution, experiment_name, file_name):
+    np.savetxt(f'{experiment_name}/{file_name}', solution)
 
-    env = create_environment(N_HIDDEN_NEURONS, test_experiment, enemy)
 
-    # Test GA best solution
-    best_solution_path_ga = f'{path_train}/GA_train_run{i}_enemy{enemy}/best.txt'
-    test_best_solution(enemy, i, test_experiment, env, best_solution_path_ga, '')
-
-    # Test GA+SA best solution
-    best_solution_path_sa = f'{path_train}/GA_SA_train_run{i}_enemy{enemy}/best_sa.txt'
-    test_best_solution(enemy, i, test_experiment, env, best_solution_path_sa, '_sa')
+def calculate_n_vars(env):
+    return (env.get_num_sensors() + 1) * N_HIDDEN_NEURONS + (N_HIDDEN_NEURONS + 1) * 5
 
 
 if __name__ == "__main__":
     if MODE == MODE_TRAIN:
         for enemy in ENEMIES:
-            print("Running EA1_GA...")
-            with mp.Pool(processes=os.cpu_count()) as pool:
-                pool.starmap(train_ga, [(i, enemy) for i in range(TRAIN_RUNS)])
+            print(f"Training EA1 for Enemy {enemy}...")
 
-            print("Running EA2_GA_SA...")
             with mp.Pool(processes=os.cpu_count()) as pool:
-                pool.starmap(train_ga_sa, [(i, enemy) for i in range(TRAIN_RUNS)])
+                pool.starmap(train_ea1, [(i, enemy) for i in range(TRAIN_RUNS)])
+
+            # print(f"Training EA2 for Enemy {enemy}...")
+
+            # Placeholder for EA2; currently does nothing
+            # with mp.Pool(processes=os.cpu_count()) as pool:
+            #     pool.starmap(train_ea2, [(i, enemy) for i in range(TRAIN_RUNS)])
 
     elif MODE == MODE_TEST:
         for enemy in ENEMIES:
             for i in range(1, TRAIN_RUNS + 1):
-                print(f"Testing enemy {enemy}, run {i}")
-                test_ga(enemy, i)
+
+                print(f"Testing enemy {enemy}")
+
+                test_experiment = f'test_run_enemy{enemy}/best_{i}'
+                path_train = f'train_run_enemy{enemy}'
+                if not os.path.exists(test_experiment):
+                    os.makedirs(test_experiment)
+
+                env = create_environment(N_HIDDEN_NEURONS, test_experiment, enemy)
+
+                # Load the best solution
+                try:
+                    best_solution_path_ga = f'{path_train}/EA1_train_run{i}_enemy{enemy}/best_A.txt'
+                    test_best_solution(enemy, i, test_experiment, env, best_solution_path_ga, '')
+
+                except IOError:
+                    print(f"Error: Best solution for enemy {enemy} not found.")
