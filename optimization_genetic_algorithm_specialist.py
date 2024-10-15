@@ -58,8 +58,8 @@ def initialize_deap_toolbox(n_vars, env):
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
     toolbox.register("evaluate", evaluate_individual, env)
-    toolbox.register("mate", tools.cxBlend)
-    toolbox.register("mutate", tools.mutGaussian, indpb=0.2)
+    toolbox.register("mate", tools.cxBlend, alpha=0.5)
+    toolbox.register("mutate", tools.mutGaussian, mu=0.0, sigma=1.0, indpb=0.2)
     toolbox.register("select", tools.selTournament, tournsize=3)
 
     return toolbox
@@ -249,7 +249,7 @@ def train_ea1(i, enemies):
 
     # Initialize A and B
     Group_A = toolbox.population(n=N_POPULATION)
-    # Group_B = toolbox.population(n=N_POPULATION)
+    Group_B = []
 
     mutation_rate_A = MUTATION_PROBABILITY
     mutation_rate_B = 0.1
@@ -272,8 +272,6 @@ def train_ea1(i, enemies):
     save_best_solution(Group_B[0], experiment_name, 'best_B.txt')
 
 
-
-# Placeholder for EA2 (not implemented yet)
 def train_ea2(i, enemies):
     experiment_name = f'train_run_enemy{enemies}/EA2_train_run{i + 1}_enemy{enemies}'
     if not os.path.exists(experiment_name):
