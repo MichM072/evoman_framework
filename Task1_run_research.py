@@ -61,7 +61,7 @@ def train_agent(
     enemies: list[int],
     overwrite: bool = False,
     max_runs: int = 10,
-):
+) -> None:
 
     current_log = []
 
@@ -119,8 +119,10 @@ def find_highest_fitness(fitness_scores: list[str]) -> int:
     return fitness_list.index(str(best_fit))
 
 # Start training phase
-def test_best_agent(agent: GASpecialistSA, enemies: list[int]):
-
+def test_best_agent(
+        agent: GASpecialistSA,
+        enemies: list[int]
+) -> None:
     # Create new result file
     with open(f"{agent.experiment_name}/testing_results.txt", "w") as file_aux:
         file_aux.write("{:<10} {:<10} {:<10} {:<10} {:<10}\n".format(

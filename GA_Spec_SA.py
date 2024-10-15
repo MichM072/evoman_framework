@@ -11,12 +11,15 @@ import time
 import numpy as np
 from deap import base, creator, tools
 from deap.base import Toolbox
-
 from evoman.environment import Environment
 from demo_controller import player_controller
+from logger import Logger
 
 
 class GASpecialistSA:
+    MODE_TRAIN = "Train"
+    MODE_TUNE = "Tune"
+    MODE_TEST = "Test"
 
     def __init__(
         self,
@@ -33,7 +36,6 @@ class GASpecialistSA:
         min_mutpb: float = 0.01,
         cooling_rate: float = 0.99,
     ):
-
         self.headless = headless
         self.experiment_name = experiment_name
         self.n_hidden_neurons = n_hidden_neurons
@@ -49,10 +51,13 @@ class GASpecialistSA:
         self.cooling_rate = cooling_rate  # Cooling Rate
 
         self.enemy = 4  # default placeholder
-        self.env = ""
+        self.env = None
         self.run = 0
-        self.mode = "TRAIN"
+        self.mode = self.MODE_TRAIN
         self.sa = sa  # Simulated Annealing enabled or disabled
+
+        # other
+        self.logger = None
 
     # Environment Setup
     def setup_environment(self, enemy: int) -> Environment:
@@ -76,12 +81,12 @@ class GASpecialistSA:
             randomini="yes",
         )
 
-    def setup_deap(self, env: Environment) -> Toolbox:
-        # Sets up DEAP's genetic algorithm
-        n_vars = (env.get_num_sensors() + 1) * self.n_hidden_neurons + (
-            self.n_hidden_neurons + 1
-        ) * 5
-
+    def setup_deap(
+            self,
+            env: Environment,
+            n_vars: int
+    ) -> Toolbox:
+        # Sets up DEAP package and GA
         creator.create("FitnessMax", base.Fitness, weights=(1.0,))
         creator.create("Individual", list, fitness=creator.FitnessMax)
 
@@ -104,22 +109,26 @@ class GASpecialistSA:
         return toolbox
 
     def generate_individual(self, n_vars: int) -> list[float]:
-        # Generates an individual with random weights within the domain limits.
-        return [random.uniform(-1, 1) for _ in range(n_vars)]
+        random_numbers = []
 
-    def simulation(self, env: Environment, individual: np.array) -> tuple[any]:
-        # Evaluates an individual's fitness in the environment.
+        for _ in range(n_vars):
+            random_number = random.uniform(-1, 1)
+            random_numbers.append(random_number)
+
+        return random_numbers
+
+    def simulation(
+            self,
+            env: Environment,
+            individual: np.array
+    ) -> tuple[any]:
         fitness, _, _, _ = env.play(pcont=np.array(individual))
         return (fitness,)
 
-    def apply_limits(self, individual: np.array) -> np.array:
-        # Applies limits to the individual's gene values.
-        return [max(min(gene, 1), -1) for gene in individual]
-
-    def run_evolution(self, toolbox) -> None:
+    def run_evolution(self, toolbox: base) -> None:
         # Runs the evolution process using the genetic algorithm.
         population = toolbox.population(n=self.population_size)
-        best = tools.HallOfFame(1)
+        best = tools.HallOfFame(1) # the best individual that ever lived in the population during the evolution
 
         # Set current Temp
         T = self.init_t
@@ -130,9 +139,9 @@ class GASpecialistSA:
         stats.register("min", np.min)
         stats.register("max", np.max)
 
-        self.log_initial_population_fitness()
+        self.logger.log_initial_population_fitness()
 
-        # Assign a function to the probability if we use SA else use default mutation proability
+        # Assign a function to the probability if we use SA else use default mutation probability
         mutpb_func = lambda: (
             self.calculate_mutation_probability_SA(T) if self.sa else self.max_mutpb
         )
@@ -150,7 +159,7 @@ class GASpecialistSA:
             record = stats.compile(population)
             best.update(population)
 
-            self.log_generation_statistics(generation, best, record)
+            self.logger.log_generation_statistics(generation, best, record)
 
             # Generate the next generation
             offspring = self.generate_offspring(population, toolbox, mutation_prob)
@@ -162,99 +171,99 @@ class GASpecialistSA:
             # Variant used: Exponential
             T = T * self.cooling_rate
 
-        self.save_results(best)
+        self.logger.save_results(best, self.run)
+        self.env.state_to_log()
 
-    def calculate_mutation_probability_SA(self, T):
+    def calculate_mutation_probability_SA(self, T: float):
         return self.min_mutpb + (self.max_mutpb - self.min_mutpb) * (T / self.init_t)
 
-    def log_initial_population_fitness(self) -> None:
-        # Logs the initial population's fitness to a file.
-        with open(self.experiment_name + f"/{self.mode.lower()}_results.txt", "a") as file_aux:
-            file_aux.write(
-                "\n{:<10} {:<10} {:<10} {:<10} ENEMY: {}\n".format(
-                    "GENERATION", "BEST", "MEAN", "STD", self.enemy
-                )
-            )
-
-    def evaluate_population(self, population: np.array, toolbox) -> None:
-        # Evaluates the fitness of the entire population.
+    def evaluate_population(
+        self,
+        population: np.array,
+        toolbox: base
+    ) -> None:
+        # Evaluates the fitness of the entire population
         fitness = list(map(toolbox.evaluate, population))
 
         for ind, fit in zip(population, fitness):
             ind.fitness.values = fit
 
-    def log_generation_statistics(
-        self, generation: np.array, best: np.array, record: np.array
-    ) -> None:
-        # Logs the statistics for the current generation.
-        best_ind = best[0]
-        best_fitness = best_ind.fitness.values[0]
-
-        print(
-            f'\n GENERATION {generation} best: {round(best_fitness, 6)} avg: {round(record["avg"], 6)} std: {round(record["std"], 6)} enemy: {self.enemy}'
-        )
-
-        with open(self.experiment_name + f"/{self.mode.lower()}_results.txt", "a") as file_aux:
-            file_aux.write(
-                f'\n{generation:<10} {best_fitness:<10.6f} {record["avg"]:<10.6f} {record["std"]:<10.6f}'
-            )
-
     def generate_offspring(
-        self, population: np.array, toolbox, mutation_prob: float
+        self,
+        population: np.array,
+        toolbox: base,
+        mutation_prob: float
     ) -> list:
-        # Generates offspring through selection, crossover, and mutation.
+        # Select individuals from pop
         offspring = toolbox.select(population, len(population))
-        offspring = list(map(toolbox.clone, offspring))
+        # Make copies of the pop
+        offspring = [toolbox.clone(ind) for ind in offspring]
 
-        for child1, child2 in zip(offspring[::2], offspring[1::2]):
+        # Apply crossover to pairs of inds based on crossover_probability
+        for i in range(0, len(offspring) - 1, 2):
             if random.random() < self.crossover_probability:
-                toolbox.mate(child1, child2)
-                del child1.fitness.values
-                del child2.fitness.values
+                toolbox.mate(offspring[i], offspring[i + 1])
 
-        for child in offspring:
+                # After crossover, the fitness is deleted as the child "changed".
+                # So the fitness is not correct anymore
+                # The children are evaluated
+                del offspring[i].fitness.values
+                del offspring[i + 1].fitness.values
+
+        # Apply mutation to individuals with some probability
+        for ind in offspring:
             if random.random() < mutation_prob:
-                toolbox.mutate(child)
-                del child.fitness.values
+                toolbox.mutate(ind)
 
-        # Evaluate individuals with invalid fitness values
+                del ind.fitness.values
+
+        # Recalculate fitness for individuals whose fitness was deleted
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-        fitness = map(toolbox.evaluate, invalid_ind)
+        fitness_values = map(toolbox.evaluate, invalid_ind)
 
-        for ind, fit in zip(invalid_ind, fitness):
+        # Assign the recalculated fitness values to the individuals
+        for ind, fit in zip(invalid_ind, fitness_values):
             ind.fitness.values = fit
 
         return offspring
 
-    def save_results(self, best) -> None:
-        # Saves the best solution and logs the simulation state.
-        np.savetxt(self.experiment_name + f"/enemy_{self.enemy}/{self.mode.lower()}_best_{self.run}.txt", best[0])
-        with open(self.experiment_name + f"/enemy_{self.enemy}/{self.mode.lower()}_best_fitness.txt", "a") as f:
-            f.write(f"{self.run}: {best[0].fitness.values[0]}\n")
-        print(f"\nBest fitness achieved: {best[0].fitness.values[0]}")
-
-        # Save the simulation state and log state of the environment
-        self.env.state_to_log()
-
-    def run_experiment(self, enemy: int, mode: str, run: int, best_ind_idx: int):
+    def run_experiment(
+        self,
+        enemy: int,
+        mode: str,
+        run: int,
+        best_ind_idx: int
+    ):
         self.enemy = enemy
         self.run = run
         self.mode = mode
-        ini = time.time()
-        self.env = self.setup_environment(enemy=self.enemy)
 
-        if self.mode == "Train" or "Tune":
-            toolbox = self.setup_deap(self.env)
+        start_time = time.time()
+
+        self.env = self.setup_environment(enemy=self.enemy)
+        n_vars = (self.env.get_num_sensors() + 1) * self.n_hidden_neurons + (self.n_hidden_neurons + 1) * 5
+
+        self.logger = Logger(
+            self.experiment_name,
+            self.mode,
+            self.enemy
+        )
+
+        """
+           - TRAIN or TUNE: Runs the evolution process
+           - TEST: Runs the simulation using the best solution from memory
+        """
+        if self.mode == self.MODE_TRAIN or self.MODE_TUNE:
+            toolbox = self.setup_deap(self.env, n_vars)
             self.run_evolution(toolbox)
-        elif self.mode == "Test":
-            # Run simulation with the best solution for selected enemy.
+        elif self.mode == self.MODE_TEST:
             best_ind = np.loadtxt(self.experiment_name+f'/enemy_{self.enemy}/best_{best_ind_idx}.txt')
             print("\n Using best solution from memory \n")
             fitness, player, enemy, game_time = self.env.play(pcont=best_ind)
             return fitness, player, enemy, game_time
         else:
-            print(f"Invalid mode: {self.mode}")
+            raise ValueError(f"Invalid mode: {self.mode}")
 
         end_time = time.time()
 
-        print(f"\nExecution time: {round((end_time - ini) / 60)} minutes")
+        print(f"\nExecution time: {round((end_time - start_time) / 60)} minutes")
