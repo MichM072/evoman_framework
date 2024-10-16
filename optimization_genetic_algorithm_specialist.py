@@ -255,18 +255,34 @@ def train_ea1(i, enemies):
     mutation_rate_B = 0.1
     history_A, history_B = [], []
 
-    for generation in range(N_GENERATIONS):
-        Group_A, Group_B = evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_rate_A,
-                                             mutation_rate_B)
 
-        # Are individuals valid? Check!
-        best_A = max(ind.fitness.values[0] for ind in Group_A if ind.fitness.valid)
-        best_B = max(ind.fitness.values[0] for ind in Group_B if ind.fitness.valid)
+    stats = tools.Statistics(lambda ind: ind.fitness.values[0])
+    stats.register("avg", np.mean)
+    stats.register("std", np.std)
+    stats.register("min", np.min)
+    stats.register("max", np.max)
 
-        history_A.append(best_A)
-        history_B.append(best_B)
+    log_file_path = f"{experiment_name}/results_EA2.csv"
 
-        print(f"Generation {generation}: Best A: {best_A}, Best B: {best_B}")
+    with open(log_file_path, 'w', newline='') as log_file:
+        csv_writer = csv.writer(log_file)
+        csv_writer.writerow(['Generation', 'Max', 'Avg', 'Std', 'Min'])
+
+        for generation in range(N_GENERATIONS):
+            Group_A, Group_B = evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_rate_A,
+                                                 mutation_rate_B)
+
+            # Are individuals valid? Check!
+            best_A = max(ind.fitness.values[0] for ind in Group_A if ind.fitness.valid)
+            best_B = max(ind.fitness.values[0] for ind in Group_B if ind.fitness.valid)
+
+            history_A.append(best_A)
+            history_B.append(best_B)
+
+            print(f"Generation {generation}: Best A: {best_A}, Best B: {best_B}")
+
+            record = stats.compile(Group_A)
+            log_generation_to_csv(csv_writer, generation, record)
 
     save_best_solution(Group_A[0], experiment_name, 'best_A.txt')
     save_best_solution(Group_B[0], experiment_name, 'best_B.txt')
@@ -287,18 +303,32 @@ def train_ea2(i, enemies):
     mutation_rate = MUTATION_PROBABILITY
     history = []
 
-    for generation in range(N_GENERATIONS):
-        pop = evolve_population_EA2(pop, toolbox, history, mutation_rate,)
+    stats = tools.Statistics(lambda ind: ind.fitness.values[0])
+    stats.register("avg", np.mean)
+    stats.register("std", np.std)
+    stats.register("min", np.min)
+    stats.register("max", np.max)
 
-        # Are individuals valid? Check!
-        best = max(ind.fitness.values[0] for ind in pop if ind.fitness.valid)
+    log_file_path = f"{experiment_name}/results_EA2.csv"
 
-        history.append(best)
+    with open(log_file_path, 'w', newline='') as log_file:
+        csv_writer = csv.writer(log_file)
+        csv_writer.writerow(['Generation', 'Max', 'Avg', 'Std', 'Min'])
 
-        print(f"Generation {generation}: Best: {best}")
+        for generation in range(N_GENERATIONS):
+            pop = evolve_population_EA2(pop, toolbox, history, mutation_rate,)
 
-    save_best_solution(pop[0], experiment_name, 'best_A.txt')
+            # Are individuals valid? Check!
+            best = max(ind.fitness.values[0] for ind in pop if ind.fitness.valid)
 
+            history.append(best)
+
+            print(f"Generation {generation}: Best: {best}")
+
+            record = stats.compile(pop)
+            log_generation_to_csv(csv_writer, generation, record)
+
+        save_best_solution(pop[0], experiment_name, 'best_A.txt')
 
 def test_best_solution(enemy, i, test_experiment, env, best_solution_path, file_suffix):
     try:
@@ -331,14 +361,24 @@ def test_best_solution(enemy, i, test_experiment, env, best_solution_path, file_
         csv_writer.writerow(['Average Individual Gain', avg_gain])
         csv_writer.writerow(['Standard Deviation', std_gain])
 
+def calculate_n_vars(env):
+    return (env.get_num_sensors() + 1) * N_HIDDEN_NEURONS + (N_HIDDEN_NEURONS + 1) * 5
+
+def log_generation_to_csv(csv_writer, generation, record):
+    csv_writer.writerow([generation, record['max'], record['avg'], record['std'], record['min']])
+    # print(f"Generation {generation}: Max {record['max']} Avg {record['avg']} Std {record['std']} Min {record['min']}")
 
 def save_best_solution(solution, experiment_name, file_name):
     np.savetxt(f'{experiment_name}/{file_name}', solution)
 
 
-def calculate_n_vars(env):
-    return (env.get_num_sensors() + 1) * N_HIDDEN_NEURONS + (N_HIDDEN_NEURONS + 1) * 5
-
+def log_results_to_csv(log, experiment_name, file_name):
+    with open(f'{experiment_name}/{file_name}', 'w', newline='') as file:
+        csv_writer = csv.writer(file)
+        csv_writer.writerow(['Generation', 'Max', 'Avg', 'Std', 'Min'])
+        for generation in log:
+            csv_writer.writerow(
+                [generation['gen'], generation['max'], generation['avg'], generation['std'], generation['min']])
 
 if __name__ == "__main__":
     if MODE == MODE_TRAIN:
