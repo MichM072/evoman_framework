@@ -84,6 +84,7 @@ def simulate_environment(env, individual):
     return fitness
 
 
+#TODO: This function is wrong, we check per individual of each group.
 def check_significant_growth(group, history, threshold=NUM_GENERATIONS_WITHOUT_GROWTH):
     if len(history) < threshold:
         return True  #Cannot judge if not enough info
@@ -94,7 +95,7 @@ def check_significant_growth(group, history, threshold=NUM_GENERATIONS_WITHOUT_G
 def increase_mutation_rate(mutation_rate):
     return min(1.0, mutation_rate * 1.1)  ## TODO: What is the min? Is 1.0 ok?
 
-
+#TODO: We do not crossover between groups.
 def crossover_and_mutate(group_1, group_2, toolbox, mutation_rate):
     for ind1, ind2 in zip(group_1[:len(group_1) // 2], group_2[:len(group_2) // 2]):
         if np.random.rand() < CROSSOVER_PROBABILITY:
@@ -164,6 +165,7 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_
         crossover_and_mutate(Group_A, Group_B, toolbox, mutation_rate_A)
         crossover_and_mutate(Group_B, Group_A, toolbox, mutation_rate_B)
 
+#TODO: We need to check the individuals on significant growth, not on fitness.
     if Group_A:  # Ensure Group_A is not empty
         avg_fitness_A = np.mean([i.fitness.values[0] for i in Group_A]) if Group_A else 0
         for ind in Group_A:
@@ -199,6 +201,7 @@ def evolve_population_EA2(pop, toolbox, history_pop, mutation_rate):
         for ind, fit in zip(invalid_individuals, fitnesses):
             ind.fitness.values = fit  # Assign the fitness values
 
+#TODO: This growth check should be different, we should discuss with Luiz and Georgia.
     if not check_significant_growth(pop, history_pop) and pop:
         mutation_rate = increase_mutation_rate(mutation_rate)
 
