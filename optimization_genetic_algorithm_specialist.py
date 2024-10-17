@@ -64,6 +64,7 @@ def initialize_deap_toolbox(n_vars, env):
 
     return toolbox
 
+#TODO: Apply normalisation in the code.
 def normalize_value(value, data_population):
     value_range = np.ptp(data_population)  # using numpy for simplicity (max-min)
     normalized_value = (value - np.min(data_population)) / value_range if value_range > 0 else 0
@@ -84,8 +85,16 @@ def simulate_environment(env, individual):
     return fitness
 
 
-#TODO: This function is wrong, we check per individual of each group.
+#TODO: Check growth such that it is the growth of the whole group
 def check_significant_growth(group, history, threshold=NUM_GENERATIONS_WITHOUT_GROWTH):
+    if len(history) < threshold:
+        return True  #Cannot judge if not enough info
+
+    return np.mean(history[-threshold:]) > np.mean(history[-2 * threshold:-threshold]) # TODO: make this more readable pls
+
+#TODO: Adjust function to check growth of individuals
+#Get sum of all 5 gens for individual and divide by 5
+def check_individual_significant_growth(group, history, threshold=NUM_GENERATIONS_WITHOUT_GROWTH):
     if len(history) < threshold:
         return True  #Cannot judge if not enough info
 
@@ -145,15 +154,6 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_
 
     if invalid_individuals_B:
         evaluate_invalid_individuals(toolbox, invalid_individuals_B)
-    # if invalid_individuals_A:
-    #     fitnesses_A = map(toolbox.evaluate, invalid_individuals_A)
-    #     for ind, fit in zip(invalid_individuals_A, fitnesses_A):
-    #         ind.fitness.values = fit  # Assign the fitness values
-    #
-    # if invalid_individuals_B:
-    #     fitnesses_B = map(toolbox.evaluate, invalid_individuals_B)
-    #     for ind, fit in zip(invalid_individuals_B, fitnesses_B):
-    #         ind.fitness.values = fit  # Assign the fitness values
 
     # if not check_significant_growth(Group_A, history_A) and Group_A:
     #     mutation_rate_A = increase_mutation_rate(mutation_rate_A)
@@ -181,11 +181,12 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_
     Group_A = elitism(Group_A, ELITISM_RATE) if Group_A else Group_A
     Group_B = elitism(Group_B, ELITISM_RATE) if Group_B else Group_B
 
-    Group_A = remove_least_performers(Group_A, N_LEAST_PERFORMING) if Group_A else Group_A
-    Group_B = remove_least_performers(Group_B, N_LEAST_PERFORMING) if Group_B else Group_B
+    # Group_A = remove_least_performers(Group_A, N_LEAST_PERFORMING) if Group_A else Group_A
+    # Group_B = remove_least_performers(Group_B, N_LEAST_PERFORMING) if Group_B else Group_B
 
     # Reproduce
     # TODO: Check if this logic holds, we flood group_B with individuals that might not even belong there.
+    # Add only the amount of individuals that we removed from said group.
     if Group_A:
         Group_A += toolbox.population(n=N_POPULATION - len(Group_A))
     if Group_B:
@@ -232,7 +233,7 @@ def evolve_population_EA2(pop, toolbox, history_pop, mutation_rate):
 
     pop = elitism(pop, ELITISM_RATE) if pop else pop
 
-    pop = remove_least_performers(pop, N_LEAST_PERFORMING) if pop else pop
+    # pop = remove_least_performers(pop, N_LEAST_PERFORMING) if pop else pop
 
     # Reproduce
     if pop:
@@ -249,6 +250,10 @@ def train_ea1(i, enemies):
     env = create_environment(N_HIDDEN_NEURONS, experiment_name, enemies)
     n_vars = calculate_n_vars(env)
     toolbox = initialize_deap_toolbox(n_vars, env)
+
+    # Create dict to track individuals and gen
+    # e.g. individual 1 with id 1 with 2 gens = [1,2]
+    ind_dict = {}
 
     # Initialize A and B
     Group_A = toolbox.population(n=N_POPULATION)
