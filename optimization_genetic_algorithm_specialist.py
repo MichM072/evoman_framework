@@ -20,7 +20,10 @@ N_LEAST_PERFORMING = 5  # Remove num of ind that are performing very bad
 ENEMY_GROUPS = [[2,5,6], [5,7,8]] #TODO: Change default values
 TRAIN_RUNS = 10
 TEST_RUNS = 5
-SIGNIFICANT_GROWTH = 1
+SIGNIFICANT_GROWTH = 5
+
+UP_LIMIT = 1
+LOWER_LIMIT = -1
 
 GEN_THRESHOLD = 5
 
@@ -43,7 +46,7 @@ def create_environment(n_hidden_neurons, experiment_name, enemies):
         level=2,
         speed="fastest",
         visuals=False,
-        randomini='yes'
+        randomini='no'
     )
 
 
@@ -74,6 +77,12 @@ def normalize_value(value, data_population):
     normalized_value = (value - np.min(data_population)) / value_range if value_range > 0 else 0
 
     return max(normalized_value, 1e-10)
+
+# Limits the range of all floats in individual between upper and lower limit.
+def limit_range(ind):
+    ind[ind > UP_LIMIT] = UP_LIMIT
+    ind[ind < LOWER_LIMIT] = LOWER_LIMIT
+
 
 def evaluate_individual(env, individual):
     return simulate_environment(env, individual),
@@ -110,6 +119,8 @@ def increase_mutation_rate(mutation_rate):
 
 #TODO: We do not crossover between groups.
 def crossover_and_mutate(group, toolbox, mutation_rate):
+    if not group:
+        return
     for ind1, ind2 in zip(group[::2], group[1::2]):
         if np.random.rand() < CROSSOVER_PROBABILITY:
             toolbox.mate(ind1, ind2)
@@ -119,16 +130,19 @@ def crossover_and_mutate(group, toolbox, mutation_rate):
             toolbox.mutate(ind)
             del ind.fitness.values
 
-        # Evaluate the individuals with an invalid fitness
+    # Evaluate the individuals with an invalid fitness
     invalid_ind = [ind for ind in group if not ind.fitness.valid]
     fitnesses = map(toolbox.evaluate, invalid_ind)
 
     for ind, fit in zip(invalid_ind, fitnesses):
+        limit_range(ind)
         ind.fitness.values = fit
 
 
 def elitism(group, elitism_rate):
     num_elite = int(len(group) * elitism_rate)
+    if num_elite == 0:
+        return group
     sorted_group = sorted(group, key=lambda x: x.fitness.values[0], reverse=True)
     return sorted_group[:num_elite]
 
@@ -144,11 +158,13 @@ def remove_least_performers(group, num_individuals_to_remove):
 def move_to_group_B(individual, Group_A, Group_B):
     # Group_A = [ind for ind in Group_A if not np.array_equal(ind, individual)]
     Group_B.append(individual)
+    Group_A = [arr for arr in Group_A if not np.array_equal(arr, individual)]
 
 
 def move_to_group_A(individual, Group_A, Group_B):
     # Group_B = [ind for ind in Group_B if not np.array_equal(ind, individual)]
     Group_A.append(individual)
+    Group_B = [arr for arr in Group_B if not np.array_equal(arr, individual)]
 
 
 def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
@@ -162,23 +178,23 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
     if invalid_individuals_B:
         evaluate_invalid_individuals(toolbox, invalid_individuals_B)
 
-    if Group_A and Group_B:  # Only perform crossover if both groups are non-empty
-        crossover_and_mutate(Group_A, toolbox, mutation_rate_A)
-        crossover_and_mutate(Group_B, toolbox, mutation_rate_B)
+    crossover_and_mutate(Group_A, toolbox, mutation_rate_A)
+    crossover_and_mutate(Group_B, toolbox, mutation_rate_B)
 
 #TODO: We need to check the individuals on significant growth, not on fitness.
     for ind in Group_A:
         if ind.gen == GEN_THRESHOLD:
             ind.gen = 0
-            if not check_individual_significant_growth(ind, GEN_THRESHOLD):
+            if not check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
                 move_to_group_B(ind, Group_A, Group_B)
+            ind.sum_growth = 0
 
     for ind in Group_B:
         if ind.gen == GEN_THRESHOLD:
             ind.gen = 0
-            if check_individual_significant_growth(ind, GEN_THRESHOLD):
+            if check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
                 move_to_group_B(ind, Group_B, Group_A)
-
+            ind.sum_growth = 0
     # if Group_A:  # Ensure Group_A is not empty
     #     avg_fitness_A = np.mean([i.fitness.values[0] for i in Group_A]) if Group_A else 0
     #     for ind in Group_A:
