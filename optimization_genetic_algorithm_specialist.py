@@ -20,6 +20,9 @@ N_LEAST_PERFORMING = 5  # Remove num of ind that are performing very bad
 ENEMY_GROUPS = [[2,5,6], [5,7,8]] #TODO: Change default values
 TRAIN_RUNS = 10
 TEST_RUNS = 5
+SIGNIFICANT_GROWTH = 1
+
+GEN_THRESHOLD = 5
 
 MODE_TRAIN = 'Train'
 MODE_TEST = 'Test'
@@ -50,7 +53,8 @@ def initialize_deap_toolbox(n_vars, env):
         creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 
     if 'Individual' not in creator.__dict__:
-        creator.create("Individual", np.ndarray, fitness=creator.FitnessMax)
+        creator.create("Individual", np.ndarray, fitness=creator.FitnessMax, id=None,
+                       gen=0, sum_growth=0, prev_fitness=0)
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", np.random.uniform, -1, 1)
@@ -94,31 +98,33 @@ def check_significant_growth(group, history, threshold=NUM_GENERATIONS_WITHOUT_G
 
 #TODO: Adjust function to check growth of individuals
 #Get sum of all 5 gens for individual and divide by 5
-def check_individual_significant_growth(group, history, threshold=NUM_GENERATIONS_WITHOUT_GROWTH):
-    if len(history) < threshold:
-        return True  #Cannot judge if not enough info
+def check_individual_significant_growth(ind, threshold=SIGNIFICANT_GROWTH):
+    return (ind.sum_growth / GEN_THRESHOLD) > threshold
 
-    return np.mean(history[-threshold:]) > np.mean(history[-2 * threshold:-threshold]) # TODO: make this more readable pls
-
+def check_growth(ind):
+   ind.sum_growth += ind.fitness.values[0] - ind.prev_fitness
+   ind.prev_fitness = ind.fitness.values[0]
 
 def increase_mutation_rate(mutation_rate):
     return min(1.0, mutation_rate * 1.1)  ## TODO: What is the min? Is 1.0 ok?
 
 #TODO: We do not crossover between groups.
-def crossover_and_mutate(group_1, group_2, toolbox, mutation_rate):
-    for ind1, ind2 in zip(group_1[:len(group_1) // 2], group_2[:len(group_2) // 2]):
+def crossover_and_mutate(group, toolbox, mutation_rate):
+    for ind1, ind2 in zip(group[::2], group[1::2]):
         if np.random.rand() < CROSSOVER_PROBABILITY:
             toolbox.mate(ind1, ind2)
+            del ind1.fitness.values, ind2.fitness.values
+    for ind in group:
         if np.random.rand() < mutation_rate:
-            toolbox.mutate(ind1)
-            toolbox.mutate(ind2)
+            toolbox.mutate(ind)
+            del ind.fitness.values
 
         # Evaluate the individuals with an invalid fitness
-        invalid_ind = [ind for ind in [ind1, ind2] if not ind.fitness.valid]
-        fitnesses = map(toolbox.evaluate, invalid_ind)
+    invalid_ind = [ind for ind in group if not ind.fitness.valid]
+    fitnesses = map(toolbox.evaluate, invalid_ind)
 
-        for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = fit
+    for ind, fit in zip(invalid_ind, fitnesses):
+        ind.fitness.values = fit
 
 
 def elitism(group, elitism_rate):
@@ -145,7 +151,8 @@ def move_to_group_A(individual, Group_A, Group_B):
     Group_A.append(individual)
 
 
-def evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_rate_A, mutation_rate_B):
+def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
+                      mutation_rate_A, mutation_rate_B, ind_dict):
     invalid_individuals_A = [ind for ind in Group_A if not ind.fitness.valid]
     invalid_individuals_B = [ind for ind in Group_B if not ind.fitness.valid]
 
@@ -155,28 +162,37 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_
     if invalid_individuals_B:
         evaluate_invalid_individuals(toolbox, invalid_individuals_B)
 
-    # if not check_significant_growth(Group_A, history_A) and Group_A:
-    #     mutation_rate_A = increase_mutation_rate(mutation_rate_A)
-    #
-    # if not check_significant_growth(Group_B, history_B) and Group_B:
-    #     mutation_rate_B = increase_mutation_rate(mutation_rate_B)
-
     if Group_A and Group_B:  # Only perform crossover if both groups are non-empty
-        crossover_and_mutate(Group_A, Group_B, toolbox, mutation_rate_A)
-        crossover_and_mutate(Group_B, Group_A, toolbox, mutation_rate_B)
+        crossover_and_mutate(Group_A, toolbox, mutation_rate_A)
+        crossover_and_mutate(Group_B, toolbox, mutation_rate_B)
 
 #TODO: We need to check the individuals on significant growth, not on fitness.
-    if Group_A:  # Ensure Group_A is not empty
-        avg_fitness_A = np.mean([i.fitness.values[0] for i in Group_A]) if Group_A else 0
-        for ind in Group_A:
-            if ind.fitness.values[0] < avg_fitness_A:
+    for ind in Group_A:
+        if ind.gen == GEN_THRESHOLD:
+            ind.gen = 0
+            if not check_individual_significant_growth(ind, GEN_THRESHOLD):
                 move_to_group_B(ind, Group_A, Group_B)
 
-    if Group_B:  # Ensure Group_B is not empty
-        avg_fitness_B = np.mean([i.fitness.values[0] for i in Group_B]) if Group_B else 0
-        for ind in Group_B:
-            if ind.fitness.values[0] > avg_fitness_B:
-                move_to_group_A(ind, Group_A, Group_B)
+    for ind in Group_B:
+        if ind.gen == GEN_THRESHOLD:
+            ind.gen = 0
+            if check_individual_significant_growth(ind, GEN_THRESHOLD):
+                move_to_group_B(ind, Group_B, Group_A)
+
+    # if Group_A:  # Ensure Group_A is not empty
+    #     avg_fitness_A = np.mean([i.fitness.values[0] for i in Group_A]) if Group_A else 0
+    #     for ind in Group_A:
+    #         if ind.fitness.values[0] < avg_fitness_A:
+    #             move_to_group_B(ind, Group_A, Group_B)
+    #
+    # if Group_B:  # Ensure Group_B is not empty
+    #     avg_fitness_B = np.mean([i.fitness.values[0] for i in Group_B]) if Group_B else 0
+    #     for ind in Group_B:
+    #         if ind.fitness.values[0] > avg_fitness_B:
+    #             move_to_group_A(ind, Group_A, Group_B)
+
+    original_size_A = len(Group_A)
+    original_size_B = len(Group_B)
 
     Group_A = elitism(Group_A, ELITISM_RATE) if Group_A else Group_A
     Group_B = elitism(Group_B, ELITISM_RATE) if Group_B else Group_B
@@ -187,10 +203,19 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_
     # Reproduce
     # TODO: Check if this logic holds, we flood group_B with individuals that might not even belong there.
     # Add only the amount of individuals that we removed from said group.
+
+    # Increase gen counter per individual after elitism
+    for ind in Group_A + Group_B:
+        check_growth(ind)
+        ind.gen += 1
+
     if Group_A:
-        Group_A += toolbox.population(n=N_POPULATION - len(Group_A))
+        Group_A += toolbox.population(n=original_size_A - len(Group_A))
     if Group_B:
-        Group_B += toolbox.population(n=N_POPULATION - len(Group_B))
+        Group_B += toolbox.population(n=original_size_B - len(Group_B))
+
+    invalid_individuals = [ind for ind in Group_A + Group_B if not ind.fitness.valid]
+    evaluate_invalid_individuals(toolbox, invalid_individuals)
 
     return Group_A, Group_B
 
@@ -259,6 +284,11 @@ def train_ea1(i, enemies):
     Group_A = toolbox.population(n=N_POPULATION)
     Group_B = []
 
+    # Assigns id to individual and add to dict.
+    # for idx, ind in enumerate(Group_A):
+    #     ind.id = idx
+    #     ind_dict[ind.id] = 0
+
     mutation_rate_A = MUTATION_PROBABILITY
     mutation_rate_B = 0.1
     history_A, history_B = [], []
@@ -277,17 +307,24 @@ def train_ea1(i, enemies):
         csv_writer.writerow(['Generation', 'Max', 'Avg', 'Std', 'Min'])
 
         for generation in range(N_GENERATIONS):
-            Group_A, Group_B = evolve_population(Group_A, Group_B, toolbox, history_A, history_B, mutation_rate_A,
-                                                 mutation_rate_B)
+            Group_A, Group_B = evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
+                                                 mutation_rate_A, mutation_rate_B, ind_dict)
 
             # Are individuals valid? Check!
             best_A = max(ind.fitness.values[0] for ind in Group_A if ind.fitness.valid)
-            best_B = max(ind.fitness.values[0] for ind in Group_B if ind.fitness.valid)
+            if Group_B:
+                best_B = max(ind.fitness.values[0] for ind in Group_B if ind.fitness.valid)
+            else:
+                best_B = 0
 
             history_A.append(best_A)
             history_B.append(best_B)
 
             print(f"Generation {generation}: Best A: {best_A}, Best B: {best_B}")
+
+            for ind in Group_A:
+                if not ind.fitness.valid:
+                    print("invalid fitness found!")
 
             record = stats.compile(Group_A)
             log_generation_to_csv(csv_writer, generation, record)
@@ -393,13 +430,17 @@ if __name__ == "__main__":
         for enemy_group in ENEMY_GROUPS:
             print(f"Training EA1 for group: {enemy_group}...")
 
-            with mp.Pool(processes=os.cpu_count()) as pool:
-                pool.starmap(train_ea1, [(i, enemy_group) for i in range(TRAIN_RUNS)])
+            #TODO: REMOVE THIS, slow but works on macbook.
+            for i in range(TRAIN_RUNS):
+                train_ea1(i, enemy_group)
 
-            print(f"Training EA2 for group: {enemy_group}...")
+            # with mp.Pool(processes=os.cpu_count()) as pool:
+            #     pool.starmap(train_ea1, [(i, enemy_group) for i in range(TRAIN_RUNS)])
 
-            with mp.Pool(processes=os.cpu_count()) as pool:
-                pool.starmap(train_ea2, [(i, enemy_group) for i in range(TRAIN_RUNS)])
+            # print(f"Training EA2 for group: {enemy_group}...")
+            #
+            # with mp.Pool(processes=os.cpu_count()) as pool:
+            #     pool.starmap(train_ea2, [(i, enemy_group) for i in range(TRAIN_RUNS)])
 
     elif MODE == MODE_TEST:
         for enemy in ENEMY_GROUPS:
