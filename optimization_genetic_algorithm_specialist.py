@@ -138,14 +138,22 @@ def crossover_and_mutate(group, toolbox, mutation_rate):
         limit_range(ind)
         ind.fitness.values = fit
 
+def elitism(group, elitism_rate, age_threshold):
+    #AGE-BASED APPROACH
+    # Sort by fitness (good to bad)
+    num_elite_by_fitness = int(len(group) * elitism_rate)
+    sorted_by_fitness = sorted(group, key=lambda x: x.fitness.values[0], reverse=True)
+    top_by_fitness = sorted_by_fitness[:num_elite_by_fitness]
 
-def elitism(group, elitism_rate):
-    num_elite = int(len(group) * elitism_rate)
-    if num_elite == 0:
-        return group
-    sorted_group = sorted(group, key=lambda x: x.fitness.values[0], reverse=True)
-    return sorted_group[:num_elite]
+    # Sort by age and select top 10% oldest individuals
+    num_elite_by_age = max(1, int(len(group) * 0.10))  # Ensure at least one individual is selected
+    sorted_by_age = sorted(group, key=lambda x: x.age, reverse=True)
+    top_by_age = [ind for ind in sorted_by_age if ind.age >= age_threshold][:num_elite_by_age]
 
+    # Combine one group for fitness and one for age
+    elites = list(set(top_by_fitness + top_by_age))  # Remove doublesss
+
+    return elites
 
 def get_fitness_value(individual):
     return individual.fitness.values[0]
@@ -181,40 +189,10 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
     crossover_and_mutate(Group_A, toolbox, mutation_rate_A)
     crossover_and_mutate(Group_B, toolbox, mutation_rate_B)
 
-#TODO: We need to check the individuals on significant growth, not on fitness.
-    for ind in Group_A:
-        if ind.gen == GEN_THRESHOLD:
-            ind.gen = 0
-            if not check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
-                move_to_group_B(ind, Group_A, Group_B)
-            ind.sum_growth = 0
-
-    for ind in Group_B:
-        if ind.gen == GEN_THRESHOLD:
-            ind.gen = 0
-            if check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
-                move_to_group_B(ind, Group_B, Group_A)
-            ind.sum_growth = 0
-    # if Group_A:  # Ensure Group_A is not empty
-    #     avg_fitness_A = np.mean([i.fitness.values[0] for i in Group_A]) if Group_A else 0
-    #     for ind in Group_A:
-    #         if ind.fitness.values[0] < avg_fitness_A:
-    #             move_to_group_B(ind, Group_A, Group_B)
-    #
-    # if Group_B:  # Ensure Group_B is not empty
-    #     avg_fitness_B = np.mean([i.fitness.values[0] for i in Group_B]) if Group_B else 0
-    #     for ind in Group_B:
-    #         if ind.fitness.values[0] > avg_fitness_B:
-    #             move_to_group_A(ind, Group_A, Group_B)
-
-    original_size_A = len(Group_A)
-    original_size_B = len(Group_B)
-
-    Group_A = elitism(Group_A, ELITISM_RATE) if Group_A else Group_A
-    Group_B = elitism(Group_B, ELITISM_RATE) if Group_B else Group_B
-
-    # Group_A = remove_least_performers(Group_A, N_LEAST_PERFORMING) if Group_A else Group_A
-    # Group_B = remove_least_performers(Group_B, N_LEAST_PERFORMING) if Group_B else Group_B
+    # Perform age-based elitism with a 10% threshold
+    # TODO: what is the age_threshold???
+    Group_A = elitism(Group_A, ELITISM_RATE, age_threshold=5) if Group_A else Group_A
+    Group_B = elitism(Group_B, ELITISM_RATE, age_threshold=5) if Group_B else Group_B
 
     # Reproduce
     # TODO: Check if this logic holds, we flood group_B with individuals that might not even belong there.
@@ -224,7 +202,12 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
     for ind in Group_A + Group_B:
         check_growth(ind)
         ind.gen += 1
+        ind.age += 1  # Increment the age of each individual
 
+    original_size_A = len(Group_A)
+    original_size_B = len(Group_B)
+
+    # Fill population back to original size after elitism
     if Group_A:
         Group_A += toolbox.population(n=original_size_A - len(Group_A))
     if Group_B:
