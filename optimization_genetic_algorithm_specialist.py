@@ -481,22 +481,22 @@ if __name__ == "__main__":
                 pool.starmap(train_ea2, [(i, enemy_group) for i in range(TRAIN_RUNS)])
 
     elif MODE == MODE_TEST:
-        for enemy in ENEMY_GROUPS:
+        for enemy_group in ENEMY_GROUPS:
             for i in range(1, TRAIN_RUNS + 1):
 
-                print(f"Testing enemy {enemy}")
+                print(f"Testing enemy {enemy_group}")
 
-                test_experiment = f'test_run_enemy{enemy}/best_{i}'
-                path_train = f'train_run_enemy{enemy}'
+                test_experiment = f'test_run_enemy{enemy_group}/best_{i}'
+                path_train = f'train_run_enemy{enemy_group}'
                 if not os.path.exists(test_experiment):
                     os.makedirs(test_experiment)
 
-                env = create_environment(N_HIDDEN_NEURONS, test_experiment, enemy)
+                env = create_environment(N_HIDDEN_NEURONS, test_experiment, enemy_group)
 
                 # Load the best solution
                 try:
-                    best_solution_path_ga = f'{path_train}/EA1_train_run{i}_enemy{enemy}/best_A.txt'
-                    test_best_solution(enemy, i, test_experiment, env, best_solution_path_ga, '')
+                    best_solution_path_ga = f'{path_train}/EA1_train_run{i}_enemy{enemy_group}/best_A.txt'
+                    test_best_solution(enemy_group, i, test_experiment, env, best_solution_path_ga, '')
 
                 except IOError:
-                    print(f"Error: Best solution for enemy {enemy} not found.")
+                    print(f"Error: Best solution for enemy {enemy_group} not found.")
