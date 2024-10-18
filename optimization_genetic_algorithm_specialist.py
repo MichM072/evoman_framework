@@ -15,7 +15,7 @@ N_GENERATIONS = 30
 MUTATION_PROBABILITY = 0.05
 CROSSOVER_PROBABILITY = 0.9
 NUM_GENERATIONS_WITHOUT_GROWTH = 5  # Threshold for stagnation
-ELITISM_RATE = 0.2  # Percentage of best to keep
+ELITISM_RATE = 0.05  # Percentage of best to keep
 N_LEAST_PERFORMING = 5  # Remove num of ind that are performing very bad
 ENEMY_GROUPS = [[2,5,6], [5,7,8]] #TODO: Change default values
 TRAIN_RUNS = 10
@@ -207,37 +207,14 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
     elites_A = elitism(Group_A, ELITISM_RATE) if Group_A else []
     elites_B = elitism(Group_B, ELITISM_RATE) if Group_B else []
 
-    offspring_A = list(map(toolbox.clone, Group_A))
-    offspring_B = list(map(toolbox.clone, Group_B))
+    offspring_A = toolbox.select(Group_A, len(Group_A))
+    offspring_B = toolbox.select(Group_B, len(Group_B))
+
+    offspring_A = list(map(toolbox.clone, offspring_A))
+    offspring_B = list(map(toolbox.clone, offspring_B))
 
     crossover_and_mutate(offspring_A, toolbox, mutation_rate_A)
     crossover_and_mutate(offspring_B, toolbox, mutation_rate_B)
-
-    # Swap between groups if there is (no) significant growth.
-    # Move to A from B if there is growth and vice versa.
-    for ind in offspring_A:
-        if ind.gen == GEN_THRESHOLD:
-            ind.gen = 0
-            if not check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
-                move_to_group_B(ind, offspring_A, offspring_B)
-            ind.sum_growth = 0
-
-    for ind in offspring_B:
-        if ind.gen == GEN_THRESHOLD:
-            ind.gen = 0
-            if check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
-                move_to_group_B(ind, offspring_B, offspring_A)
-            ind.sum_growth = 0
-
-    # Reproduce
-    # TODO: Check if this logic holds, we flood group_B with individuals that might not even belong there.
-    # Add only the amount of individuals that we removed from said group.
-
-    # Increase gen counter per individual after elitism
-    for ind in offspring_A + offspring_B:
-        check_growth(ind)
-        ind.gen += 1
-        # ind.age += 1  # Increment the age of each individual
 
     # Fill population back to original size after elitism
     offspring_A = sorted(offspring_A, key=lambda x: x.fitness.values[0], reverse=False)
@@ -251,6 +228,34 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
     # If the elite is not better than any of the individuals it is dropped.
     for elites, offspring in zip([elites_A, elites_B], [offspring_A, offspring_B]):
         replace_with_elites(elites, offspring)
+
+    # Swap between groups if there is (no) significant growth.
+    # Move to A from B if there is growth and vice versa.
+    for ind in offspring_A:
+        if ind.gen == GEN_THRESHOLD:
+            ind.gen = 0
+            if not check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
+                print(f"Moving individual with growth: {ind.sum_growth/5} and fitness:{ind.fitness.values[0]} to group B")
+                move_to_group_B(ind, offspring_A, offspring_B)
+            ind.sum_growth = 0
+
+    for ind in offspring_B:
+        if ind.gen == GEN_THRESHOLD:
+            ind.gen = 0
+            if check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
+                print(f"Moving individual with growth: {ind.sum_growth / 5} and fitness:{ind.fitness.values[0]} to group A")
+                move_to_group_B(ind, offspring_B, offspring_A)
+            ind.sum_growth = 0
+
+    # Reproduce
+    # TODO: Check if this logic holds, we flood group_B with individuals that might not even belong there.
+    # Add only the amount of individuals that we removed from said group.
+
+    # Increase gen counter per individual after elitism
+    for ind in offspring_A + offspring_B:
+        check_growth(ind)
+        ind.gen += 1
+        # ind.age += 1  # Increment the age of each individual
 
     invalid_individuals = [ind for ind in offspring_A + offspring_B if not ind.fitness.valid]
     evaluate_invalid_individuals(toolbox, invalid_individuals)
@@ -270,7 +275,8 @@ def evolve_population_EA2(pop, toolbox, history_pop, mutation_rate):
         mutation_rate = increase_mutation_rate(mutation_rate)
 
     if pop:  # Only perform crossover if population is not empty
-        offspring = list(map(toolbox.clone, pop))
+        offspring = toolbox.select(pop, len(pop))
+        offspring = list(map(toolbox.clone, offspring))
 
         # Apply crossover and mutation
         for child1, child2 in zip(offspring[::2], offspring[1::2]):
@@ -328,7 +334,7 @@ def train_ea1(i, enemies):
     #     ind_dict[ind.id] = 0
 
     mutation_rate_A = MUTATION_PROBABILITY
-    mutation_rate_B = 0.1
+    mutation_rate_B = 0.3 # High mutation rate to force stagnant individuals to explore.
     history_A, history_B = [], []
 
 
