@@ -138,7 +138,7 @@ def crossover_and_mutate(group, toolbox, mutation_rate):
         limit_range(ind)
         ind.fitness.values = fit
 
-def elitism(group, elitism_rate, age_threshold):
+def elitism(group, elitism_rate):
     #AGE-BASED APPROACH
     # Sort by fitness (good to bad)
     num_elite_by_fitness = int(len(group) * elitism_rate)
@@ -146,14 +146,29 @@ def elitism(group, elitism_rate, age_threshold):
     top_by_fitness = sorted_by_fitness[:num_elite_by_fitness]
 
     # Sort by age and select top 10% oldest individuals
-    num_elite_by_age = max(1, int(len(group) * 0.10))  # Ensure at least one individual is selected
-    sorted_by_age = sorted(group, key=lambda x: x.age, reverse=True)
-    top_by_age = [ind for ind in sorted_by_age if ind.age >= age_threshold][:num_elite_by_age]
+    # num_elite_by_age = max(1, int(len(group) * 0.10))  # Ensure at least one individual is selected
+    # sorted_by_age = sorted(group, key=lambda x: x.age, reverse=True)
+    # top_by_age = [ind for ind in sorted_by_age if ind.age >= age_threshold][:num_elite_by_age]
 
-    # Combine one group for fitness and one for age
-    elites = list(set(top_by_fitness + top_by_age))  # Remove doublesss
+    elites = list(top_by_fitness)
 
     return elites
+
+def replace_with_elites(elites, offspring):
+    # Ensure you do not replace your own elite.
+    offset = 0
+    for i in range(len(elites)):
+        for j in range(offset, len(offspring)):
+            if elites[i].fitness.values[0] > offspring[j].fitness.values[0]:
+                # If elite is better than poor performer replace.
+                offspring[j] = elites[i]
+                assert offspring[j].fitness.values[0] == elites[i].fitness.values[0]
+                offset = j + 1
+                break
+            elif elites[i].fitness.values[0] < offspring[j].fitness.values[0]:
+                # Stop if the elite has a lower value than the item in the offspring.
+                # This allows us to continue if it is equal.
+                break
 
 def get_fitness_value(individual):
     return individual.fitness.values[0]
@@ -180,43 +195,67 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
     invalid_individuals_A = [ind for ind in Group_A if not ind.fitness.valid]
     invalid_individuals_B = [ind for ind in Group_B if not ind.fitness.valid]
 
+
     if invalid_individuals_A:
         evaluate_invalid_individuals(toolbox, invalid_individuals_A)
 
     if invalid_individuals_B:
         evaluate_invalid_individuals(toolbox, invalid_individuals_B)
 
-    crossover_and_mutate(Group_A, toolbox, mutation_rate_A)
-    crossover_and_mutate(Group_B, toolbox, mutation_rate_B)
-
     # Perform age-based elitism with a 10% threshold
     # TODO: what is the age_threshold???
-    Group_A = elitism(Group_A, ELITISM_RATE, age_threshold=5) if Group_A else Group_A
-    Group_B = elitism(Group_B, ELITISM_RATE, age_threshold=5) if Group_B else Group_B
+    elites_A = elitism(Group_A, ELITISM_RATE) if Group_A else []
+    elites_B = elitism(Group_B, ELITISM_RATE) if Group_B else []
+
+    offspring_A = list(map(toolbox.clone, Group_A))
+    offspring_B = list(map(toolbox.clone, Group_B))
+
+    crossover_and_mutate(offspring_A, toolbox, mutation_rate_A)
+    crossover_and_mutate(offspring_B, toolbox, mutation_rate_B)
+
+    # Swap between groups if there is (no) significant growth.
+    # Move to A from B if there is growth and vice versa.
+    for ind in offspring_A:
+        if ind.gen == GEN_THRESHOLD:
+            ind.gen = 0
+            if not check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
+                move_to_group_B(ind, offspring_A, offspring_B)
+            ind.sum_growth = 0
+
+    for ind in offspring_B:
+        if ind.gen == GEN_THRESHOLD:
+            ind.gen = 0
+            if check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
+                move_to_group_B(ind, offspring_B, offspring_A)
+            ind.sum_growth = 0
 
     # Reproduce
     # TODO: Check if this logic holds, we flood group_B with individuals that might not even belong there.
     # Add only the amount of individuals that we removed from said group.
 
     # Increase gen counter per individual after elitism
-    for ind in Group_A + Group_B:
+    for ind in offspring_A + offspring_B:
         check_growth(ind)
         ind.gen += 1
-        ind.age += 1  # Increment the age of each individual
-
-    original_size_A = len(Group_A)
-    original_size_B = len(Group_B)
+        # ind.age += 1  # Increment the age of each individual
 
     # Fill population back to original size after elitism
-    if Group_A:
-        Group_A += toolbox.population(n=original_size_A - len(Group_A))
-    if Group_B:
-        Group_B += toolbox.population(n=original_size_B - len(Group_B))
+    offspring_A = sorted(offspring_A, key=lambda x: x.fitness.values[0], reverse=False)
+    offspring_B = sorted(offspring_B, key=lambda x: x.fitness.values[0], reverse=False)
 
-    invalid_individuals = [ind for ind in Group_A + Group_B if not ind.fitness.valid]
+    # Make sure the lite list is also sorted from lowest elite to highest.
+    elites_A.sort(key=lambda x: x.fitness.values[0], reverse=False)
+    elites_B.sort(key=lambda x: x.fitness.values[0], reverse=False)
+
+    # Replace the worst performers with elites.
+    # If the elite is not better than any of the individuals it is dropped.
+    for elites, offspring in zip([elites_A, elites_B], [offspring_A, offspring_B]):
+        replace_with_elites(elites, offspring)
+
+    invalid_individuals = [ind for ind in offspring_A + offspring_B if not ind.fitness.valid]
     evaluate_invalid_individuals(toolbox, invalid_individuals)
 
-    return Group_A, Group_B
+    return offspring_A, offspring_B
 
 def evolve_population_EA2(pop, toolbox, history_pop, mutation_rate):
     invalid_individuals = [ind for ind in pop if not ind.fitness.valid]
