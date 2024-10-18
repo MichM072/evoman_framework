@@ -99,25 +99,24 @@ def simulate_environment(env, individual):
 
 
 #TODO: Check growth such that it is the growth of the whole group
-def check_significant_growth(group, history, threshold=NUM_GENERATIONS_WITHOUT_GROWTH):
-    if len(history) < threshold:
-        return True  #Cannot judge if not enough info
+def check_significant_growth(group, threshold=SIGNIFICANT_GROWTH):
+    sum_all_ind = np.sum([(ind.sum_growth / GEN_THRESHOLD) for ind in group])
+    return (sum_all_ind / len(group)) >= threshold
 
-    return np.mean(history[-threshold:]) > np.mean(history[-2 * threshold:-threshold]) # TODO: make this more readable pls
-
-#TODO: Adjust function to check growth of individuals
 #Get sum of all 5 gens for individual and divide by 5
 def check_individual_significant_growth(ind, threshold=SIGNIFICANT_GROWTH):
-    return (ind.sum_growth / GEN_THRESHOLD) > threshold
+    return (ind.sum_growth / GEN_THRESHOLD) >= threshold
 
 def check_growth(ind):
    ind.sum_growth += ind.fitness.values[0] - ind.prev_fitness
    ind.prev_fitness = ind.fitness.values[0]
 
 def increase_mutation_rate(mutation_rate):
-    return min(1.0, mutation_rate * 1.1)  ## TODO: What is the min? Is 1.0 ok?
+    return min(1, mutation_rate * 1.5) #TOOD: Play around with these values to see any meaningful effect.
 
-#TODO: We do not crossover between groups.
+def decrease_mutation_rate(mutation_rate):
+    return max(0.005, mutation_rate * 0.5)  #TOOD: Play around with these values to see any meaningful effect.
+
 def crossover_and_mutate(group, toolbox, mutation_rate):
     if not group:
         return
@@ -154,6 +153,8 @@ def elitism(group, elitism_rate):
 
     return elites
 
+#TODO: Perhaps replace this with a singular elite?
+# e.g. only keep the best for each gen.
 def replace_with_elites(elites, offspring):
     # Ensure you do not replace your own elite.
     offset = 0
@@ -191,7 +192,7 @@ def move_to_group_A(individual, Group_A, Group_B):
 
 
 def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
-                      mutation_rate_A, mutation_rate_B, ind_dict):
+                      mutation_rate_A, mutation_rate_B):
     invalid_individuals_A = [ind for ind in Group_A if not ind.fitness.valid]
     invalid_individuals_B = [ind for ind in Group_B if not ind.fitness.valid]
 
@@ -247,9 +248,6 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
                 move_to_group_B(ind, offspring_B, offspring_A)
             ind.sum_growth = 0
 
-    # Reproduce
-    # TODO: Check if this logic holds, we flood group_B with individuals that might not even belong there.
-    # Add only the amount of individuals that we removed from said group.
 
     # Increase gen counter per individual after elitism
     for ind in offspring_A + offspring_B:
@@ -262,7 +260,7 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
 
     return offspring_A, offspring_B
 
-def evolve_population_EA2(pop, toolbox, history_pop, mutation_rate):
+def evolve_population_EA2(pop, toolbox, history_pop, mutation_rate, generation):
     invalid_individuals = [ind for ind in pop if not ind.fitness.valid]
 
     if invalid_individuals:
@@ -270,11 +268,15 @@ def evolve_population_EA2(pop, toolbox, history_pop, mutation_rate):
         for ind, fit in zip(invalid_individuals, fitnesses):
             ind.fitness.values = fit  # Assign the fitness values
 
-#TODO: This growth check should be different, we should discuss with Luiz and Georgia.
-    if not check_significant_growth(pop, history_pop) and pop:
-        mutation_rate = increase_mutation_rate(mutation_rate)
+    # Increase or decrease mutation rate based on growth
+    if (generation + 1) % 5 == 0:
+        if not check_significant_growth(pop) and pop:
+            mutation_rate = increase_mutation_rate(mutation_rate)
+        else:
+            mutation_rate = decrease_mutation_rate(mutation_rate)
 
     if pop:  # Only perform crossover if population is not empty
+        elites = elitism(pop, ELITISM_RATE) if pop else []
         offspring = toolbox.select(pop, len(pop))
         offspring = list(map(toolbox.clone, offspring))
 
@@ -298,15 +300,16 @@ def evolve_population_EA2(pop, toolbox, history_pop, mutation_rate):
             ind.fitness.values = fit
 
         # Replace population with offspring
+        replace_with_elites(elites, offspring)
         pop[:] = offspring
 
-    pop = elitism(pop, ELITISM_RATE) if pop else pop
-
+    # TODO: Add this back if we decide to use this survivor selection with Elitism
+    # Keep in mind we should then adjust the elitism too!
     # pop = remove_least_performers(pop, N_LEAST_PERFORMING) if pop else pop
 
-    # Reproduce
-    if pop:
-        pop += toolbox.population(n=N_POPULATION - len(pop))
+    for ind in pop:
+        check_growth(ind)
+        ind.gen += 1
 
     return pop
 
@@ -320,18 +323,9 @@ def train_ea1(i, enemies):
     n_vars = calculate_n_vars(env)
     toolbox = initialize_deap_toolbox(n_vars, env)
 
-    # Create dict to track individuals and gen
-    # e.g. individual 1 with id 1 with 2 gens = [1,2]
-    ind_dict = {}
-
     # Initialize A and B
     Group_A = toolbox.population(n=N_POPULATION)
     Group_B = []
-
-    # Assigns id to individual and add to dict.
-    # for idx, ind in enumerate(Group_A):
-    #     ind.id = idx
-    #     ind_dict[ind.id] = 0
 
     mutation_rate_A = MUTATION_PROBABILITY
     mutation_rate_B = 0.3 # High mutation rate to force stagnant individuals to explore.
@@ -352,7 +346,7 @@ def train_ea1(i, enemies):
 
         for generation in range(N_GENERATIONS):
             Group_A, Group_B = evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
-                                                 mutation_rate_A, mutation_rate_B, ind_dict)
+                                                 mutation_rate_A, mutation_rate_B)
 
             # Are individuals valid? Check!
             best_A = max(ind.fitness.values[0] for ind in Group_A if ind.fitness.valid)
@@ -405,7 +399,7 @@ def train_ea2(i, enemies):
         csv_writer.writerow(['Generation', 'Max', 'Avg', 'Std', 'Min'])
 
         for generation in range(N_GENERATIONS):
-            pop = evolve_population_EA2(pop, toolbox, history, mutation_rate,)
+            pop = evolve_population_EA2(pop, toolbox, history, mutation_rate, generation)
 
             # Are individuals valid? Check!
             best = max(ind.fitness.values[0] for ind in pop if ind.fitness.valid)
@@ -475,16 +469,16 @@ if __name__ == "__main__":
             print(f"Training EA1 for group: {enemy_group}...")
 
             #TODO: REMOVE THIS, slow but works on macbook.
-            for i in range(TRAIN_RUNS):
-                train_ea1(i, enemy_group)
+            # for i in range(TRAIN_RUNS):
+                # train_ea1(i, enemy_group)
 
-            # with mp.Pool(processes=os.cpu_count()) as pool:
-            #     pool.starmap(train_ea1, [(i, enemy_group) for i in range(TRAIN_RUNS)])
+            with mp.Pool(processes=os.cpu_count()) as pool:
+                pool.starmap(train_ea1, [(i, enemy_group) for i in range(TRAIN_RUNS)])
 
-            # print(f"Training EA2 for group: {enemy_group}...")
-            #
-            # with mp.Pool(processes=os.cpu_count()) as pool:
-            #     pool.starmap(train_ea2, [(i, enemy_group) for i in range(TRAIN_RUNS)])
+            print(f"Training EA2 for group: {enemy_group}...")
+
+            with mp.Pool(processes=os.cpu_count()) as pool:
+                pool.starmap(train_ea2, [(i, enemy_group) for i in range(TRAIN_RUNS)])
 
     elif MODE == MODE_TEST:
         for enemy in ENEMY_GROUPS:
