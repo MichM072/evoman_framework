@@ -4,13 +4,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import mannwhitneyu, shapiro
 
-# Set the base directory, number of individuals (best solutions), and test runs
-base_dir = ""  # Set this to your base directory if necessary
+# Set the base directory, number of test runs
 best_individuals = 10
 test_runs = 5
 
 # Folders for the experiments (each corresponding to a different enemy group)
-folders = ["test_run_enemy[1, 4, 7, 6]", "test_run_enemy[1, 8, 3, 7, 6, 5]"]
+folders = ["test_enemy[1, 4, 7, 6]", "test_enemy[1, 8, 3, 7, 6, 5]"]
 file_names = ["results_test_EA1.csv", "results_test_EA2.csv"]
 
 # Function to extract individual gains from a CSV file
@@ -27,36 +26,31 @@ def extract_individual_gains(file_path):
                     continue
     return individual_gains
 
-# Calculate the mean individual gain
-def calculate_individual_gain_mean(data):
-    return [sum(ind) / len(ind) for ind in data if len(ind) > 0]  # Ensure no empty lists
-
 # Store the extracted data
 data = {}
 
 # Loop through the folders and extract gains for both EA1 and EA2
 for folder in folders:
-    ea1_best_gains, ea2_best_gains = [], []
+    ea1_best_gains = []
+    ea2_best_gains = []
 
-    # Loop through each run folder (run_1 to run_10)
-    for i in range(1, best_individuals + 1):
-        run_folder = os.path.join(folder, f'run_{i}')
-        ea1_path = os.path.join(run_folder, file_names[0])  # results_test_EA1.csv
-        ea2_path = os.path.join(run_folder, file_names[1])  # results_test_EA2.csv
+    # Extract EA1 data from results_test_EA1.csv
+    ea1_path = os.path.join(folder, file_names[0])  # results_test_EA1.csv
+    if os.path.exists(ea1_path):
+        ea1_best_gains = extract_individual_gains(ea1_path)
+    else:
+        print(f"File not found: {ea1_path}")
 
-        if os.path.exists(ea1_path):
-            ea1_best_gains.append(extract_individual_gains(ea1_path))
-        else:
-            print(f"File not found: {ea1_path}")
-
-        if os.path.exists(ea2_path):
-            ea2_best_gains.append(extract_individual_gains(ea2_path))
-        else:
-            print(f"File not found: {ea2_path}")
+    # Extract EA2 data from results_test_EA2.csv
+    ea2_path = os.path.join(folder, file_names[1])  # results_test_EA2.csv
+    if os.path.exists(ea2_path):
+        ea2_best_gains = extract_individual_gains(ea2_path)
+    else:
+        print(f"File not found: {ea2_path}")
 
     # Store mean gains for both EA1 and EA2
-    data[f"{folder}_EA1"] = calculate_individual_gain_mean(ea1_best_gains)
-    data[f"{folder}_EA2"] = calculate_individual_gain_mean(ea2_best_gains)
+    data[f"{folder}_EA1"] = ea1_best_gains
+    data[f"{folder}_EA2"] = ea2_best_gains
 
 # Prepare data for plotting
 boxplot_data = [

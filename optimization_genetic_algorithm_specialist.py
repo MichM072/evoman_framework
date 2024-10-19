@@ -5,6 +5,7 @@ import multiprocessing as mp
 from deap import base, creator, tools, algorithms
 from evoman.environment import Environment
 from demo_controller import player_controller
+import statistics
 
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
@@ -29,7 +30,7 @@ GEN_THRESHOLD = 5
 
 MODE_TRAIN = 'Train'
 MODE_TEST = 'Test'
-MODE = MODE_TRAIN  #'Train' or 'Test' based on your needs
+MODE = MODE_TEST  #'Train' or 'Test' based on your needs
 
 Group_A = []
 Group_B = []
@@ -418,43 +419,30 @@ def train_ea2(i, enemies):
         save_best_solution(pop[0], experiment_name, 'best.txt')
 
 
-def test_best_solution(enemy, i, test_experiment, env, best_solution_path, file_suffix):
+def test_best_solution(run_number, test_experiment, env, best_solution_path, file_suffix):
     try:
         best_solution = np.loadtxt(best_solution_path)
     except IOError:
-        print(f"Error: Best solution for enemy {enemy} not found at {best_solution_path}.")
+        print(f"ERROR: Best solution for run {run_number} not found at {best_solution_path}.")
         return
 
-    print(f'\nRUNNING SAVED BEST SOLUTION {file_suffix.upper()}\n')
     individual_gains = []
 
-    # Create a subfolder for each test run (run_1, run_2, ..., run_10)
-    run_folder = os.path.join(test_experiment, f'run_{i}')
-    if not os.path.exists(run_folder):
-        os.makedirs(run_folder)
+    log_file_path_gain = os.path.join(test_experiment, f'results_test_{file_suffix}.csv')
 
-    log_file_path_gain = f"{run_folder}/results_test_{file_suffix}.csv"
+    fitness, player_life, enemy_life, time = env.play(best_solution)
+    individual_gain = player_life - enemy_life
+    individual_gains.append(individual_gain)
 
-    with open(log_file_path_gain, 'w', newline='') as file_aux:
+    # Calculate the average gain across all enemies for this run
+    avg_gain = np.mean(individual_gains)
+
+    with open(log_file_path_gain, 'a', newline='') as file_aux:
         csv_writer = csv.writer(file_aux)
-        csv_writer.writerow(['Run', 'Gain'])
+        csv_writer.writerow([run_number, avg_gain])
 
-        for run in range(TEST_RUNS):
-            print(f"Test run {run + 1} for enemy {enemy}")
-            fitness, player_life, enemy_life, time = env.play(best_solution)
-            individual_gain = player_life - enemy_life
-            individual_gains.append(individual_gain)
-            print(f"Individual gain for run {run + 1}: {individual_gain}")
-            csv_writer.writerow([run + 1, individual_gain])
+    return avg_gain
 
-        avg_gain = np.mean(individual_gains)
-        std_gain = np.std(individual_gains)
-        print(f"\nAverage individual gain for enemy {enemy} over {TEST_RUNS} runs: {avg_gain}")
-        print(f"Standard deviation: {std_gain}")
-
-        csv_writer.writerow([])
-        csv_writer.writerow(['Average Individual Gain', avg_gain])
-        csv_writer.writerow(['Standard Deviation', std_gain])
 
 def calculate_n_vars(env):
     return (env.get_num_sensors() + 1) * N_HIDDEN_NEURONS + (N_HIDDEN_NEURONS + 1) * 5
@@ -475,6 +463,26 @@ def log_results_to_csv(log, experiment_name, file_name):
             csv_writer.writerow(
                 [generation['gen'], generation['max'], generation['avg'], generation['std'], generation['min']])
 
+def save_results_to_csv(gains_list, file_path):
+    # Calculate average and standard deviation
+    gains = [item['Gain'] for item in gains_list]
+    average_gain = sum(gains) / len(gains)
+    std_dev = statistics.stdev(gains) if len(gains) > 1 else 0.0
+
+    # Write to CSV
+    with open(file_path, 'w', newline='') as csvfile:
+        fieldnames = ['Run', 'Gain']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        writer.writeheader()
+        for item in gains_list:
+            writer.writerow(item)
+
+        # Write average and standard deviation
+        writer.writerow({})
+        writer.writerow({'Run': 'Average Individual Gain', 'Gain': average_gain})
+        writer.writerow({'Run': 'Standard Deviation', 'Gain': std_dev})
+
 if __name__ == "__main__":
     if MODE == MODE_TRAIN:
         for enemy_group in ENEMY_GROUPS:
@@ -494,25 +502,40 @@ if __name__ == "__main__":
 
     if MODE == MODE_TEST:
         for enemy_group in ENEMY_GROUPS:
-            for i in range(1, TRAIN_RUNS + 1):
-                test_experiment = f'test_run_enemy{enemy_group}'  # Base folder test runs
-                path_train = f'train_run_enemy{enemy_group}'  # Base folder training res
+            # Create the folder structure for the test (e.g., test_enemy[...])
+            test_experiment_base = f'test_enemy{enemy_group}'
+            if not os.path.exists(test_experiment_base):
+                os.makedirs(test_experiment_base)
 
-                # Check if experiment already existis, if not create it
-                if not os.path.exists(test_experiment):
-                    os.makedirs(test_experiment)
+            gains_EA1 = []
+            gains_EA2 = []
 
-                env = create_environment(N_HIDDEN_NEURONS, test_experiment, enemy_group)
+            env = create_environment(N_HIDDEN_NEURONS, test_experiment_base, [1,2,3,4,5,6,7,8])
 
-                # Test each best solution each best solution of each run 10x for EA1 and EA2
+            # Loop through 10 runs (TRAIN_RUNS)
+            for run_number in range(1, TRAIN_RUNS + 1):
+                # Paths to the best solution files for EA1 and EA2
+                best_solution_path_EA1 = f'train_run_enemy{enemy_group}/EA1_train_run{run_number}_enemy{enemy_group}/best.txt'
+                best_solution_path_EA2 = f'train_run_enemy{enemy_group}/EA2_train_run{run_number}_enemy{enemy_group}/best.txt'
+
+                # Test EA1 Best Solution
                 try:
-                    best_solution_path_EA1 = f'{path_train}/EA1_train_run{i}_enemy{enemy_group}/best.txt'
-                    test_best_solution(enemy_group, i, test_experiment, env, best_solution_path_EA1, 'EA1')
+                    gain_EA1,  = test_best_solution(run_number, test_experiment_base, env, best_solution_path_EA1, 'EA1')
+                    gains_EA1.append({'Run': run_number, 'Gain': gain_EA1})
                 except IOError:
-                    print(f"Error: Best solution for enemy {enemy_group} not found for EA1.")
+                    print(f"Error: Best solution for enemy group {enemy_group} in run {run_number} not found for EA1.")
 
+                # Test EA2 Best Solution
                 try:
-                    best_solution_path_EA2 = f'{path_train}/EA2_train_run{i}_enemy{enemy_group}/best.txt'
-                    test_best_solution(enemy_group, i, test_experiment, env, best_solution_path_EA2, 'EA2')
+                    gain_EA2 = test_best_solution(run_number, test_experiment_base, env, best_solution_path_EA2, 'EA2')
+                    gains_EA2.append({'Run': run_number, 'Gain': gain_EA2})
                 except IOError:
-                    print(f"Error: Best solution for enemy {enemy_group} not found for EA2.")
+                    print(f"Error: Best solution for enemy group {enemy_group} in run {run_number} not found for EA2.")
+
+            # Save results to CSV files for each algorithm
+            save_results_to_csv(gains_EA1, os.path.join(test_experiment_base, 'results_test_EA1.csv'))
+            save_results_to_csv(gains_EA2, os.path.join(test_experiment_base, 'results_test_EA2.csv'))
+
+            # Optionally: Create evoman_logs.txt if needed
+            with open(os.path.join(test_experiment_base, 'evoman_logs.txt'), 'w') as log_file:
+                log_file.write(f'Log information for enemy group {enemy_group}...\n')
