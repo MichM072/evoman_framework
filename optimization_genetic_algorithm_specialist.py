@@ -338,7 +338,7 @@ def train_ea1(i, enemies):
     stats.register("min", np.min)
     stats.register("max", np.max)
 
-    log_file_path = f"{experiment_name}/results_EA2.csv"
+    log_file_path = f"{experiment_name}/results_EA1.csv"
 
     with open(log_file_path, 'w', newline='') as log_file:
         csv_writer = csv.writer(log_file)
@@ -411,7 +411,7 @@ def train_ea2(i, enemies):
             record = stats.compile(pop)
             log_generation_to_csv(csv_writer, generation, record)
 
-        save_best_solution(pop[0], experiment_name, 'best_A.txt')
+        save_best_solution(pop[0], experiment_name, 'best.txt')
 
 def test_best_solution(enemy, i, test_experiment, env, best_solution_path, file_suffix):
     try:
