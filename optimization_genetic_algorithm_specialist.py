@@ -19,7 +19,7 @@ ELITISM_RATE = 0.05  # Percentage of best to keep
 N_LEAST_PERFORMING = 5  # Remove num of ind that are performing very bad
 ENEMY_GROUPS = [[1,4,7,6], [1,8,3,7,6,5]] #TODO: Change default values
 TRAIN_RUNS = 10
-TEST_RUNS = 5
+TEST_RUNS = 10
 SIGNIFICANT_GROWTH = 1
 
 UP_LIMIT = 1
@@ -253,7 +253,6 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
     for ind in offspring_A + offspring_B:
         check_growth(ind)
         ind.gen += 1
-        # ind.age += 1  # Increment the age of each individual
 
     invalid_individuals = [ind for ind in offspring_A + offspring_B if not ind.fitness.valid]
     evaluate_invalid_individuals(toolbox, invalid_individuals)
@@ -367,8 +366,13 @@ def train_ea1(i, enemies):
             record = stats.compile(Group_A)
             log_generation_to_csv(csv_writer, generation, record)
 
-    save_best_solution(Group_A[0], experiment_name, 'best_A.txt')
-    save_best_solution(Group_B[0], experiment_name, 'best_B.txt')
+        # Choose the best solution between best_A and best_B and save it as best.txt
+        if best_B > best_A:
+            print(f"Best_B selected with fitness: {best_B}")
+            save_best_solution(Group_B[0], experiment_name, 'best.txt')
+        else:
+            print(f"Best_A selected with fitness: {best_A}")
+            save_best_solution(Group_A[0], experiment_name, 'best.txt')
 
 
 def train_ea2(i, enemies):
@@ -413,6 +417,7 @@ def train_ea2(i, enemies):
 
         save_best_solution(pop[0], experiment_name, 'best.txt')
 
+
 def test_best_solution(enemy, i, test_experiment, env, best_solution_path, file_suffix):
     try:
         best_solution = np.loadtxt(best_solution_path)
@@ -423,9 +428,16 @@ def test_best_solution(enemy, i, test_experiment, env, best_solution_path, file_
     print(f'\nRUNNING SAVED BEST SOLUTION {file_suffix.upper()}\n')
     individual_gains = []
 
-    with open(f'{test_experiment}/results_test{file_suffix}.csv', 'w', newline='') as file_aux:
+    # Create a subfolder for each test run (run_1, run_2, ..., run_10)
+    run_folder = os.path.join(test_experiment, f'run_{i}')
+    if not os.path.exists(run_folder):
+        os.makedirs(run_folder)
+
+    log_file_path_gain = f"{run_folder}/results_test_{file_suffix}.csv"
+
+    with open(log_file_path_gain, 'w', newline='') as file_aux:
         csv_writer = csv.writer(file_aux)
-        csv_writer.writerow(['Run', 'Individual Gain'])
+        csv_writer.writerow(['Run', 'Gain'])
 
         for run in range(TEST_RUNS):
             print(f"Test run {run + 1} for enemy {enemy}")
@@ -480,23 +492,27 @@ if __name__ == "__main__":
             with mp.Pool(processes=os.cpu_count()) as pool:
                 pool.starmap(train_ea2, [(i, enemy_group) for i in range(TRAIN_RUNS)])
 
-    elif MODE == MODE_TEST:
+    if MODE == MODE_TEST:
         for enemy_group in ENEMY_GROUPS:
             for i in range(1, TRAIN_RUNS + 1):
+                test_experiment = f'test_run_enemy{enemy_group}'  # Base folder test runs
+                path_train = f'train_run_enemy{enemy_group}'  # Base folder training res
 
-                print(f"Testing enemy {enemy_group}")
-
-                test_experiment = f'test_run_enemy{enemy_group}/best_{i}'
-                path_train = f'train_run_enemy{enemy_group}'
+                # Check if experiment already existis, if not create it
                 if not os.path.exists(test_experiment):
                     os.makedirs(test_experiment)
 
                 env = create_environment(N_HIDDEN_NEURONS, test_experiment, enemy_group)
 
-                # Load the best solution
+                # Test each best solution each best solution of each run 10x for EA1 and EA2
                 try:
-                    best_solution_path_ga = f'{path_train}/EA1_train_run{i}_enemy{enemy_group}/best_A.txt'
-                    test_best_solution(enemy_group, i, test_experiment, env, best_solution_path_ga, '')
-
+                    best_solution_path_EA1 = f'{path_train}/EA1_train_run{i}_enemy{enemy_group}/best.txt'
+                    test_best_solution(enemy_group, i, test_experiment, env, best_solution_path_EA1, 'EA1')
                 except IOError:
-                    print(f"Error: Best solution for enemy {enemy_group} not found.")
+                    print(f"Error: Best solution for enemy {enemy_group} not found for EA1.")
+
+                try:
+                    best_solution_path_EA2 = f'{path_train}/EA2_train_run{i}_enemy{enemy_group}/best.txt'
+                    test_best_solution(enemy_group, i, test_experiment, env, best_solution_path_EA2, 'EA2')
+                except IOError:
+                    print(f"Error: Best solution for enemy {enemy_group} not found for EA2.")
