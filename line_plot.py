@@ -1,16 +1,15 @@
-import pandas as pd
-import matplotlib.pyplot as plt
 import os
-import glob
+import matplotlib.pyplot as plt
+import pandas as pd
 
-ENEMY = "2"
-
-# Function to read and process files
-def process_files(file_pattern):
+# Function to extract and process fitness data from CSV files
+def process_files(file_list):
     all_max_values = []
     all_avg_values = []
 
-    for filename in glob.glob(file_pattern):
+    for filename in file_list:
+        print(f"Processing file: {filename}")
+
         # Read the CSV file into a DataFrame
         df = pd.read_csv(filename)
 
@@ -25,7 +24,7 @@ def process_files(file_pattern):
 
     # Check if we collected any data
     if not all_max_values or not all_avg_values:
-        raise ValueError("No valid data found for the specified pattern.")
+        raise ValueError("No valid data found in the specified files.")
 
     # Calculate the average and std across all valid runs
     avg_max = [sum(values) / len(values) for values in zip(*all_max_values)]
@@ -36,61 +35,118 @@ def process_files(file_pattern):
 
     return avg_max, std_max, avg_avg, std_avg
 
+# Main function to process and plot the data for both EA1 and EA2
+def main():
+    base_dir = "."  # Specify the base directory
 
-# Define the folder path and file patterns for the new CSV files
-folder_path = 'train_run_enemy' + ENEMY
-ga_files_pattern = os.path.join(folder_path, 'GA_train_run*_enemy' + ENEMY + '/results_ga.csv')
-sa_files_pattern = os.path.join(folder_path, 'GA_SA_train_run*_enemy' + ENEMY + '/results_ga_sa.csv')
+    # Manually specifying the file paths for EA1 and EA2 runs for both enemy groups (10 runs each)
+    ea1_files_enemy1 = [
+        os.path.join(base_dir, "train_run_enemy[1, 4, 7, 6]", f"EA1_train_run{i}_enemy[1, 4, 7, 6]", "results_EA1.csv")
+        for i in range(1, 11)  # Assuming 10 runs
+    ]
 
-# Process the files
-try:
-    avg_max_ga, std_max_ga, avg_avg_ga, std_avg_ga = process_files(ga_files_pattern)
-    avg_max_sa, std_max_sa, avg_avg_sa, std_avg_sa = process_files(sa_files_pattern)
+    ea2_files_enemy1 = [
+        os.path.join(base_dir, "train_run_enemy[1, 4, 7, 6]", f"EA2_train_run{i}_enemy[1, 4, 7, 6]", "results_EA2.csv")
+        for i in range(1, 11)  # Assuming 10 runs
+    ]
+
+    ea1_files_enemy2 = [
+        os.path.join(base_dir, "train_run_enemy[1, 8, 3, 7, 6, 5]", f"EA1_train_run{i}_enemy[1, 8, 3, 7, 6, 5]", "results_EA1.csv")
+        for i in range(1, 11)  # Assuming 10 runs
+    ]
+
+    ea2_files_enemy2 = [
+        os.path.join(base_dir, "train_run_enemy[1, 8, 3, 7, 6, 5]", f"EA2_train_run{i}_enemy[1, 8, 3, 7, 6, 5]", "results_EA2.csv")
+        for i in range(1, 11)  # Assuming 10 runs
+    ]
+
+    # Process files for EA1 and EA2 (enemy group 1)
+    avg_max_ea1, std_max_ea1, avg_avg_ea1, std_avg_ea1 = process_files(ea1_files_enemy1)
+    avg_max_ea2, std_max_ea2, avg_avg_ea2, std_avg_ea2 = process_files(ea2_files_enemy1)
 
     # Generations (X-axis)
-    generations = list(range(len(avg_max_ga)))  # Assuming both GA and SA have the same number of generations
+    generations = list(range(len(avg_max_ea1)))  # Assuming both EA1 and EA2 have the same number of generations
 
-    # Create plots
+    # Plot for EA1 vs EA2 for the first enemy group
     plt.figure(figsize=(12, 6))
 
-    # Plot for EA1_GA
-    plt.plot(generations, avg_max_ga, label='EA1_GA (Max)', marker='o', color='blue')
+    # Plot for EA1
+    plt.plot(generations, avg_max_ea1, label='EA1 (Max) - Enemy Group 1', marker='o', color='blue')
     plt.fill_between(generations,
-                     [avg - std for avg, std in zip(avg_max_ga, std_max_ga)],
-                     [avg + std for avg, std in zip(avg_max_ga, std_max_ga)],
+                     [avg - std for avg, std in zip(avg_max_ea1, std_max_ea1)],
+                     [avg + std for avg, std in zip(avg_max_ea1, std_max_ea1)],
                      color='blue', alpha=0.2)
 
-    plt.plot(generations, avg_avg_ga, label='EA1_GA (Avg)', marker='s', color='lightblue')
+    plt.plot(generations, avg_avg_ea1, label='EA1 (Avg) - Enemy Group 1', marker='s', color='lightblue')
     plt.fill_between(generations,
-                     [avg - std for avg, std in zip(avg_avg_ga, std_avg_ga)],
-                     [avg + std for avg, std in zip(avg_avg_ga, std_avg_ga)],
+                     [avg - std for avg, std in zip(avg_avg_ea1, std_avg_ea1)],
+                     [avg + std for avg, std in zip(avg_avg_ea1, std_avg_ea1)],
                      color='lightblue', alpha=0.2)
 
-    # Plot for EA2_GA_SA
-    plt.plot(generations, avg_max_sa, label='EA2_GA_SA (Max)', marker='o', color='orange')
+    # Plot for EA2
+    plt.plot(generations, avg_max_ea2, label='EA2 (Max) - Enemy Group 1', marker='o', color='orange')
     plt.fill_between(generations,
-                     [avg - std for avg, std in zip(avg_max_sa, std_max_sa)],
-                     [avg + std for avg, std in zip(avg_max_sa, std_max_sa)],
+                     [avg - std for avg, std in zip(avg_max_ea2, std_max_ea2)],
+                     [avg + std for avg, std in zip(avg_max_ea2, std_max_ea2)],
                      color='orange', alpha=0.2)
 
-    plt.plot(generations, avg_avg_sa, label='EA2_GA_SA (Avg)', marker='s', color='peachpuff')
+    plt.plot(generations, avg_avg_ea2, label='EA2 (Avg) - Enemy Group 1', marker='s', color='peachpuff')
     plt.fill_between(generations,
-                     [avg - std for avg, std in zip(avg_avg_sa, std_avg_sa)],
-                     [avg + std for avg, std in zip(avg_avg_sa, std_avg_sa)],
+                     [avg - std for avg, std in zip(avg_avg_ea2, std_avg_ea2)],
+                     [avg + std for avg, std in zip(avg_avg_ea2, std_avg_ea2)],
                      color='peachpuff', alpha=0.2)
 
-    # Set x and y limits, labels, title, and legend
-    plt.xlim(0, len(generations) - 1)
+    plt.xlabel('Generations')
+    plt.ylabel('Fitness')
     plt.ylim(0, 100)
-    plt.xlabel('Generations', fontsize=16)
-    plt.ylabel('Fitness', fontsize=16)
-    plt.title('EA1_GA vs EA2_GA_SA Enemy ' + ENEMY + ' comparison', fontsize=12)
-    plt.legend(fontsize=16)
+    plt.title('EA1 vs EA2 Comparison for Enemy Group 1')
+    plt.legend()
     plt.grid()
-
-    plt.tight_layout()
     plt.show()
 
+    # Process files for EA1 and EA2 (enemy group 2)
+    avg_max_ea1_2, std_max_ea1_2, avg_avg_ea1_2, std_avg_ea1_2 = process_files(ea1_files_enemy2)
+    avg_max_ea2_2, std_max_ea2_2, avg_avg_ea2_2, std_avg_ea2_2 = process_files(ea2_files_enemy2)
 
-except ValueError as e:
-    print(e)
+    # Generations (X-axis)
+    generations = list(range(len(avg_max_ea1_2)))  # Assuming both EA1 and EA2 have the same number of generations
+
+    # Plot for EA1 vs EA2 for the second enemy group
+    plt.figure(figsize=(12, 6))
+
+    # Plot for EA1
+    plt.plot(generations, avg_max_ea1_2, label='EA1 (Max) - Enemy Group 2', marker='o', color='blue')
+    plt.fill_between(generations,
+                     [avg - std for avg, std in zip(avg_max_ea1_2, std_max_ea1_2)],
+                     [avg + std for avg, std in zip(avg_max_ea1_2, std_max_ea1_2)],
+                     color='blue', alpha=0.2)
+
+    plt.plot(generations, avg_avg_ea1_2, label='EA1 (Avg) - Enemy Group 2', marker='s', color='lightblue')
+    plt.fill_between(generations,
+                     [avg - std for avg, std in zip(avg_avg_ea1_2, std_avg_ea1_2)],
+                     [avg + std for avg, std in zip(avg_avg_ea1_2, std_avg_ea1_2)],
+                     color='lightblue', alpha=0.2)
+
+    # Plot for EA2
+    plt.plot(generations, avg_max_ea2_2, label='EA2 (Max) - Enemy Group 2', marker='o', color='orange')
+    plt.fill_between(generations,
+                     [avg - std for avg, std in zip(avg_max_ea2_2, std_max_ea2_2)],
+                     [avg + std for avg, std in zip(avg_max_ea2_2, std_max_ea2_2)],
+                     color='orange', alpha=0.2)
+
+    plt.plot(generations, avg_avg_ea2_2, label='EA2 (Avg) - Enemy Group 2', marker='s', color='peachpuff')
+    plt.fill_between(generations,
+                     [avg - std for avg, std in zip(avg_avg_ea2_2, std_avg_ea2_2)],
+                     [avg + std for avg, std in zip(avg_avg_ea2_2, std_avg_ea2_2)],
+                     color='peachpuff', alpha=0.2)
+
+    plt.xlabel('Generations')
+    plt.ylabel('Fitness')
+    plt.title('EA1 vs EA2 Comparison for Enemy Group 2')
+    plt.ylim(0, 100)
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+# Call the main function
+main()
