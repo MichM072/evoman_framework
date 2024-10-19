@@ -102,17 +102,15 @@ plt.yticks(fontsize=12)
 # Show the plot
 plt.show()
 
-# Perform Shapiro-Wilk test for normality
+# Perform Shapiro-Wilk
 shapiro_results = {}
 
-# Perform Shapiro-Wilk test for normality
 for idx, dataset in enumerate(boxplot_data):
     stat, p_value = shapiro(dataset)
     label = labels[idx]
-    # Store both the statistic and the p-value in a dictionary
+
     shapiro_results[label] = {'statistic': stat, 'p_value': p_value}
 
-# Display Shapiro-Wilk test results
 print("Shapiro-Wilk test results (statistic and p-values):")
 for label, result in shapiro_results.items():
     print(f"{label}: statistic = {result['statistic']:.5f}, p = {result['p_value']:.5f}")
