@@ -426,22 +426,16 @@ def test_best_solution(run_number, test_experiment, env, best_solution_path, fil
         print(f"ERROR: Best solution for run {run_number} not found at {best_solution_path}.")
         return
 
-    individual_gains = []
-
     log_file_path_gain = os.path.join(test_experiment, f'results_test_{file_suffix}.csv')
 
     fitness, player_life, enemy_life, time = env.play(best_solution)
     individual_gain = player_life - enemy_life
-    individual_gains.append(individual_gain)
-
-    # Calculate the average gain across all enemies for this run
-    avg_gain = np.mean(individual_gains)
 
     with open(log_file_path_gain, 'a', newline='') as file_aux:
         csv_writer = csv.writer(file_aux)
-        csv_writer.writerow([run_number, avg_gain])
+        csv_writer.writerow([run_number, individual_gain])
 
-    return avg_gain
+    return individual_gain
 
 
 def calculate_n_vars(env):
@@ -520,7 +514,7 @@ if __name__ == "__main__":
 
                 # Test EA1 Best Solution
                 try:
-                    gain_EA1,  = test_best_solution(run_number, test_experiment_base, env, best_solution_path_EA1, 'EA1')
+                    gain_EA1 = test_best_solution(run_number, test_experiment_base, env, best_solution_path_EA1, 'EA1')
                     gains_EA1.append({'Run': run_number, 'Gain': gain_EA1})
                 except IOError:
                     print(f"Error: Best solution for enemy group {enemy_group} in run {run_number} not found for EA1.")
@@ -536,6 +530,5 @@ if __name__ == "__main__":
             save_results_to_csv(gains_EA1, os.path.join(test_experiment_base, 'results_test_EA1.csv'))
             save_results_to_csv(gains_EA2, os.path.join(test_experiment_base, 'results_test_EA2.csv'))
 
-            # Optionally: Create evoman_logs.txt if needed
             with open(os.path.join(test_experiment_base, 'evoman_logs.txt'), 'w') as log_file:
                 log_file.write(f'Log information for enemy group {enemy_group}...\n')
