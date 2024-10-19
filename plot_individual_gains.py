@@ -4,9 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import mannwhitneyu, shapiro
 
-# Set the base directory, number of test runs
 best_individuals = 10
-test_runs = 5
 
 # Folders for the experiments (each corresponding to a different enemy group)
 folders = ["test_enemy[1, 4, 7, 6]", "test_enemy[1, 8, 3, 7, 6, 5]"]
@@ -29,7 +27,7 @@ def extract_individual_gains(file_path):
 # Store the extracted data
 data = {}
 
-# Loop through the folders and extract gains for both EA1 and EA2
+# Loop through the folders and extract gains EA1 and EA2
 for folder in folders:
     ea1_best_gains = []
     ea2_best_gains = []
@@ -75,7 +73,7 @@ for i, j in comparisons:
     _, p = mannwhitneyu(boxplot_data[i], boxplot_data[j], alternative='two-sided')
     p_values.append(p)
 
-# Print the mean and standard deviation values for each group
+# Print the mean and std values for each group
 print("Mean and standard deviation gain per enemy:")
 for i in range(0, len(boxplot_data), 2):
     mean_ea1 = np.mean(boxplot_data[i])
