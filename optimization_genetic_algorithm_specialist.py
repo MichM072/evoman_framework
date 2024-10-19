@@ -14,13 +14,13 @@ N_POPULATION = 100
 N_GENERATIONS = 30
 MUTATION_PROBABILITY = 0.05
 CROSSOVER_PROBABILITY = 0.9
-NUM_GENERATIONS_WITHOUT_GROWTH = 5  # Threshold for stagnation
+NUM_GENERATIONS_WITHOUT_GROWTH = 3  # Threshold for stagnation
 ELITISM_RATE = 0.05  # Percentage of best to keep
 N_LEAST_PERFORMING = 5  # Remove num of ind that are performing very bad
-ENEMY_GROUPS = [[2,5,6], [5,7,8]] #TODO: Change default values
+ENEMY_GROUPS = [[1,4,7,6], [1,8,3,7,6,5]] #TODO: Change default values
 TRAIN_RUNS = 10
 TEST_RUNS = 5
-SIGNIFICANT_GROWTH = 5
+SIGNIFICANT_GROWTH = 1
 
 UP_LIMIT = 1
 LOWER_LIMIT = -1
@@ -103,7 +103,7 @@ def check_significant_growth(group, threshold=SIGNIFICANT_GROWTH):
     sum_all_ind = np.sum([(ind.sum_growth / GEN_THRESHOLD) for ind in group])
     return (sum_all_ind / len(group)) >= threshold
 
-#Get sum of all 5 gens for individual and divide by 5
+#Get sum of all gens for individual and divide by gen threshold
 def check_individual_significant_growth(ind, threshold=SIGNIFICANT_GROWTH):
     return (ind.sum_growth / GEN_THRESHOLD) >= threshold
 
@@ -236,7 +236,7 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
         if ind.gen == GEN_THRESHOLD:
             ind.gen = 0
             if not check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
-                print(f"Moving individual with growth: {ind.sum_growth/5} and fitness:{ind.fitness.values[0]} to group B")
+                # print(f"Moving individual with growth: {ind.sum_growth/5} and fitness:{ind.fitness.values[0]} to group B")
                 move_to_group_B(ind, offspring_A, offspring_B)
             ind.sum_growth = 0
 
@@ -244,7 +244,7 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
         if ind.gen == GEN_THRESHOLD:
             ind.gen = 0
             if check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
-                print(f"Moving individual with growth: {ind.sum_growth / 5} and fitness:{ind.fitness.values[0]} to group A")
+                # print(f"Moving individual with growth: {ind.sum_growth / 5} and fitness:{ind.fitness.values[0]} to group A")
                 move_to_group_B(ind, offspring_B, offspring_A)
             ind.sum_growth = 0
 
