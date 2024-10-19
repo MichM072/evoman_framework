@@ -2,7 +2,8 @@ import os
 import csv
 import numpy as np
 import multiprocessing as mp
-from deap import base, creator, tools, algorithms
+from deap import base, creator, tools
+from deap.base import Toolbox
 from evoman.environment import Environment
 from demo_controller import player_controller
 import statistics
@@ -18,7 +19,7 @@ CROSSOVER_PROBABILITY = 0.9
 NUM_GENERATIONS_WITHOUT_GROWTH = 3  # Threshold for stagnation
 ELITISM_RATE = 0.05  # Percentage of best to keep
 N_LEAST_PERFORMING = 5  # Remove num of ind that are performing very bad
-ENEMY_GROUPS = [[1,4,7,6], [1,8,3,7,6,5]] #TODO: Change default values
+ENEMY_GROUPS = [[1, 4, 7, 6], [1, 8, 3, 7, 6, 5]]
 TRAIN_RUNS = 10
 TEST_RUNS = 10
 SIGNIFICANT_GROWTH = 1
@@ -30,17 +31,17 @@ GEN_THRESHOLD = 5
 
 MODE_TRAIN = 'Train'
 MODE_TEST = 'Test'
-MODE = MODE_TEST  #'Train' or 'Test' based on your needs
+MODE = MODE_TRAIN  # 'Train' or 'Test' based on your needs
 
-Group_A = []
-Group_B = []
-
-
-def create_environment(n_hidden_neurons, experiment_name, enemies):
+def create_environment(
+        n_hidden_neurons: int,
+        experiment_name: str,
+        enemies: list[int]
+) -> Environment:
     return Environment(
         experiment_name=experiment_name,
         enemies=enemies,
-        multiplemode="yes", # THIS MUST REMAIN YES
+        multiplemode="yes",  # THIS MUST REMAIN YES
         playermode="ai",
         player_controller=player_controller(n_hidden_neurons),
         enemymode="static",
@@ -51,14 +52,13 @@ def create_environment(n_hidden_neurons, experiment_name, enemies):
     )
 
 
-def initialize_deap_toolbox(n_vars, env):
+def initialize_deap_toolbox(n_vars: int, env: Environment) -> Toolbox:
     # Avoid annoying warning
     if 'FitnessMax' not in creator.__dict__:
         creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 
     if 'Individual' not in creator.__dict__:
-        creator.create("Individual", np.ndarray, fitness=creator.FitnessMax, id=None,
-                       gen=0, sum_growth=0, prev_fitness=0)
+        creator.create("Individual", np.ndarray, fitness=creator.FitnessMax, id=None, gen=0, sum_growth=0, prev_fitness=0)
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", np.random.uniform, -1, 1)
@@ -72,53 +72,55 @@ def initialize_deap_toolbox(n_vars, env):
 
     return toolbox
 
-#TODO: Apply normalisation in the code.
-def normalize_value(value, data_population):
-    value_range = np.ptp(data_population)  # using numpy for simplicity (max-min)
-    normalized_value = (value - np.min(data_population)) / value_range if value_range > 0 else 0
-
-    return max(normalized_value, 1e-10)
-
 # Limits the range of all floats in individual between upper and lower limit.
-def limit_range(ind):
+def limit_range(ind: np.array) -> None:
     ind[ind > UP_LIMIT] = UP_LIMIT
     ind[ind < LOWER_LIMIT] = LOWER_LIMIT
 
 
-def evaluate_individual(env, individual):
+def evaluate_individual(env: Environment, individual: np.array) -> tuple:
     return simulate_environment(env, individual),
 
-def evaluate_invalid_individuals(toolbox, invalid_individuals):
+
+def evaluate_invalid_individuals(toolbox: base, invalid_individuals) -> None:
     fitnesses = map(toolbox.evaluate, invalid_individuals)
     for ind, fit in zip(invalid_individuals, fitnesses):
         ind.fitness.values = fit  # Assign the fitness values
 
 
-def simulate_environment(env, individual):
+def simulate_environment(env: Environment, individual: np.array) -> np.ndarray:
     fitness, _, _, _ = env.play(pcont=individual)
     return fitness
 
 
-#TODO: Check growth such that it is the growth of the whole group
-def check_significant_growth(group, threshold=SIGNIFICANT_GROWTH):
+def check_significant_growth(group: np.array, threshold=SIGNIFICANT_GROWTH) -> bool:
     sum_all_ind = np.sum([(ind.sum_growth / GEN_THRESHOLD) for ind in group])
     return (sum_all_ind / len(group)) >= threshold
 
-#Get sum of all gens for individual and divide by gen threshold
-def check_individual_significant_growth(ind, threshold=SIGNIFICANT_GROWTH):
+
+# Get sum of all gens for individual and divide by gen threshold
+def check_individual_significant_growth(ind: np.array, threshold=SIGNIFICANT_GROWTH) -> bool:
     return (ind.sum_growth / GEN_THRESHOLD) >= threshold
 
-def check_growth(ind):
-   ind.sum_growth += ind.fitness.values[0] - ind.prev_fitness
-   ind.prev_fitness = ind.fitness.values[0]
 
-def increase_mutation_rate(mutation_rate):
-    return min(1, mutation_rate * 1.5) #TOOD: Play around with these values to see any meaningful effect.
+def check_growth(ind: np.array) -> None:
+    ind.sum_growth += ind.fitness.values[0] - ind.prev_fitness
+    ind.prev_fitness = ind.fitness.values[0]
 
-def decrease_mutation_rate(mutation_rate):
-    return max(0.005, mutation_rate * 0.5)  #TOOD: Play around with these values to see any meaningful effect.
 
-def crossover_and_mutate(group, toolbox, mutation_rate):
+def increase_mutation_rate(mutation_rate: float or int) -> float:
+    return min(1, mutation_rate * 1.5)
+
+
+def decrease_mutation_rate(mutation_rate: float or int) -> float:
+    return max(0.005, mutation_rate * 0.5)
+
+
+def crossover_and_mutate(
+        group: np.array,
+        toolbox: base,
+        mutation_rate: float or int
+) -> None:
     if not group:
         return
     for ind1, ind2 in zip(group[::2], group[1::2]):
@@ -138,25 +140,22 @@ def crossover_and_mutate(group, toolbox, mutation_rate):
         limit_range(ind)
         ind.fitness.values = fit
 
-def elitism(group, elitism_rate):
-    #AGE-BASED APPROACH
+
+def elitism(group: np.array, elitism_rate: float or int) -> np.array:
+    # AGE-BASED APPROACH
     # Sort by fitness (good to bad)
     num_elite_by_fitness = int(len(group) * elitism_rate)
     sorted_by_fitness = sorted(group, key=lambda x: x.fitness.values[0], reverse=True)
     top_by_fitness = sorted_by_fitness[:num_elite_by_fitness]
 
-    # Sort by age and select top 10% oldest individuals
-    # num_elite_by_age = max(1, int(len(group) * 0.10))  # Ensure at least one individual is selected
-    # sorted_by_age = sorted(group, key=lambda x: x.age, reverse=True)
-    # top_by_age = [ind for ind in sorted_by_age if ind.age >= age_threshold][:num_elite_by_age]
-
     elites = list(top_by_fitness)
 
     return elites
 
-#TODO: Perhaps replace this with a singular elite?
+
+# TODO: Perhaps replace this with a singular elite?
 # e.g. only keep the best for each gen.
-def replace_with_elites(elites, offspring):
+def replace_with_elites(elites: np.array, offspring: np.array) -> None:
     # Ensure you do not replace your own elite.
     offset = 0
     for i in range(len(elites)):
@@ -172,31 +171,33 @@ def replace_with_elites(elites, offspring):
                 # This allows us to continue if it is equal.
                 break
 
-def get_fitness_value(individual):
+
+def get_fitness_value(individual: np.array) -> float:
     return individual.fitness.values[0]
 
-def remove_least_performers(group, num_individuals_to_remove):
+
+def remove_least_performers(group: np.array, num_individuals_to_remove: int) -> np.array:
     sorted_group = sorted(group, key=get_fitness_value)
     return sorted_group[num_individuals_to_remove:]
 
 
-def move_to_group_B(individual, Group_A, Group_B):
-    # Group_A = [ind for ind in Group_A if not np.array_equal(ind, individual)]
+def move_to_group_B(
+        individual: np.array,
+        Group_A: np.array,
+        Group_B: np.array
+) -> None:
     Group_B.append(individual)
     Group_A = [arr for arr in Group_A if not np.array_equal(arr, individual)]
 
-
-def move_to_group_A(individual, Group_A, Group_B):
-    # Group_B = [ind for ind in Group_B if not np.array_equal(ind, individual)]
-    Group_A.append(individual)
-    Group_B = [arr for arr in Group_B if not np.array_equal(arr, individual)]
-
-
-def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
-                      mutation_rate_A, mutation_rate_B):
+def evolve_population(
+        Group_A: np.array,
+        Group_B: np.array,
+        toolbox: Toolbox,
+        mutation_rate_A: float or int,
+        mutation_rate_B: float or int,
+) -> tuple[np.array, np.array]:
     invalid_individuals_A = [ind for ind in Group_A if not ind.fitness.valid]
     invalid_individuals_B = [ind for ind in Group_B if not ind.fitness.valid]
-
 
     if invalid_individuals_A:
         evaluate_invalid_individuals(toolbox, invalid_individuals_A)
@@ -237,7 +238,6 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
         if ind.gen == GEN_THRESHOLD:
             ind.gen = 0
             if not check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
-                # print(f"Moving individual with growth: {ind.sum_growth/5} and fitness:{ind.fitness.values[0]} to group B")
                 move_to_group_B(ind, offspring_A, offspring_B)
             ind.sum_growth = 0
 
@@ -245,10 +245,8 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
         if ind.gen == GEN_THRESHOLD:
             ind.gen = 0
             if check_individual_significant_growth(ind, SIGNIFICANT_GROWTH):
-                # print(f"Moving individual with growth: {ind.sum_growth / 5} and fitness:{ind.fitness.values[0]} to group A")
                 move_to_group_B(ind, offspring_B, offspring_A)
             ind.sum_growth = 0
-
 
     # Increase gen counter per individual after elitism
     for ind in offspring_A + offspring_B:
@@ -260,7 +258,13 @@ def evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
 
     return offspring_A, offspring_B
 
-def evolve_population_EA2(pop, toolbox, history_pop, mutation_rate, generation):
+
+def evolve_population_EA2(
+        pop: np.array,
+        toolbox: base,
+        mutation_rate: float or int,
+        generation: np.array
+):
     invalid_individuals = [ind for ind in pop if not ind.fitness.valid]
 
     if invalid_individuals:
@@ -314,7 +318,7 @@ def evolve_population_EA2(pop, toolbox, history_pop, mutation_rate, generation):
     return pop
 
 
-def train_ea1(i, enemies):
+def train_ea1(i: int, enemies: list[int]) -> None:
     experiment_name = f'train_run_enemy{enemies}/EA1_train_run{i + 1}_enemy{enemies}'
     if not os.path.exists(experiment_name):
         os.makedirs(experiment_name)
@@ -328,9 +332,8 @@ def train_ea1(i, enemies):
     Group_B = []
 
     mutation_rate_A = MUTATION_PROBABILITY
-    mutation_rate_B = 0.3 # High mutation rate to force stagnant individuals to explore.
+    mutation_rate_B = 0.3  # High mutation rate to force stagnant individuals to explore.
     history_A, history_B = [], []
-
 
     stats = tools.Statistics(lambda ind: ind.fitness.values[0])
     stats.register("avg", np.mean)
@@ -345,8 +348,7 @@ def train_ea1(i, enemies):
         csv_writer.writerow(['Generation', 'Max', 'Avg', 'Std', 'Min'])
 
         for generation in range(N_GENERATIONS):
-            Group_A, Group_B = evolve_population(Group_A, Group_B, toolbox, history_A, history_B,
-                                                 mutation_rate_A, mutation_rate_B)
+            Group_A, Group_B = evolve_population(Group_A, Group_B, toolbox, mutation_rate_A, mutation_rate_B)
 
             # Are individuals valid? Check!
             best_A = max(ind.fitness.values[0] for ind in Group_A if ind.fitness.valid)
@@ -376,7 +378,7 @@ def train_ea1(i, enemies):
             save_best_solution(Group_A[0], experiment_name, 'best.txt')
 
 
-def train_ea2(i, enemies):
+def train_ea2(i: int, enemies: list[int]) -> None:
     experiment_name = f'train_run_enemy{enemies}/EA2_train_run{i + 1}_enemy{enemies}'
     if not os.path.exists(experiment_name):
         os.makedirs(experiment_name)
@@ -404,7 +406,7 @@ def train_ea2(i, enemies):
         csv_writer.writerow(['Generation', 'Max', 'Avg', 'Std', 'Min'])
 
         for generation in range(N_GENERATIONS):
-            pop = evolve_population_EA2(pop, toolbox, history, mutation_rate, generation)
+            pop = evolve_population_EA2(pop, toolbox, mutation_rate, generation)
 
             # Are individuals valid? Check!
             best = max(ind.fitness.values[0] for ind in pop if ind.fitness.valid)
@@ -419,7 +421,13 @@ def train_ea2(i, enemies):
         save_best_solution(pop[0], experiment_name, 'best.txt')
 
 
-def test_best_solution(run_number, test_experiment, env, best_solution_path, file_suffix):
+def test_best_solution(
+        run_number: int,
+        test_experiment: str,
+        env: Environment,
+        best_solution_path: str,
+        file_suffix: str
+) -> list[any] or None:
     try:
         best_solution = np.loadtxt(best_solution_path)
     except IOError:
@@ -438,26 +446,19 @@ def test_best_solution(run_number, test_experiment, env, best_solution_path, fil
     return individual_gain
 
 
-def calculate_n_vars(env):
+def calculate_n_vars(env: Environment) -> int:
     return (env.get_num_sensors() + 1) * N_HIDDEN_NEURONS + (N_HIDDEN_NEURONS + 1) * 5
 
-def log_generation_to_csv(csv_writer, generation, record):
-    csv_writer.writerow([generation, record['max'], record['avg'], record['std'], record['min']])
-    # print(f"Generation {generation}: Max {record['max']} Avg {record['avg']} Std {record['std']} Min {record['min']}")
 
-def save_best_solution(solution, experiment_name, file_name):
+def log_generation_to_csv(csv_writer, generation: int, record) -> None:
+    csv_writer.writerow([generation, record['max'], record['avg'], record['std'], record['min']])
+
+
+def save_best_solution(solution, experiment_name: str, file_name: str) -> None:
     np.savetxt(f'{experiment_name}/{file_name}', solution)
 
 
-def log_results_to_csv(log, experiment_name, file_name):
-    with open(f'{experiment_name}/{file_name}', 'w', newline='') as file:
-        csv_writer = csv.writer(file)
-        csv_writer.writerow(['Generation', 'Max', 'Avg', 'Std', 'Min'])
-        for generation in log:
-            csv_writer.writerow(
-                [generation['gen'], generation['max'], generation['avg'], generation['std'], generation['min']])
-
-def save_results_to_csv(gains_list, file_path):
+def save_results_to_csv(gains_list: list[str, any], file_path: str) -> None:
     # Calculate average and standard deviation
     gains = [item['Gain'] for item in gains_list]
     average_gain = sum(gains) / len(gains)
@@ -477,14 +478,15 @@ def save_results_to_csv(gains_list, file_path):
         writer.writerow({'Run': 'Average Individual Gain', 'Gain': average_gain})
         writer.writerow({'Run': 'Standard Deviation', 'Gain': std_dev})
 
+
 if __name__ == "__main__":
     if MODE == MODE_TRAIN:
         for enemy_group in ENEMY_GROUPS:
             print(f"Training EA1 for group: {enemy_group}...")
 
-            #TODO: REMOVE THIS, slow but works on macbook.
+            # TODO: REMOVE THIS, slow but works on macbook.
             # for i in range(TRAIN_RUNS):
-                # train_ea1(i, enemy_group)
+            # train_ea1(i, enemy_group)
 
             with mp.Pool(processes=os.cpu_count()) as pool:
                 pool.starmap(train_ea1, [(i, enemy_group) for i in range(TRAIN_RUNS)])
@@ -504,7 +506,7 @@ if __name__ == "__main__":
             gains_EA1 = []
             gains_EA2 = []
 
-            env = create_environment(N_HIDDEN_NEURONS, test_experiment_base, [1,2,3,4,5,6,7,8])
+            env = create_environment(N_HIDDEN_NEURONS, test_experiment_base, [1, 2, 3, 4, 5, 6, 7, 8])
 
             # Loop through 10 runs (TRAIN_RUNS)
             for run_number in range(1, TRAIN_RUNS + 1):
