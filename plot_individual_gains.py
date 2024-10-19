@@ -2,7 +2,7 @@ import os
 import csv
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import mannwhitneyu, shapiro
+from scipy.stats import ttest_ind, shapiro
 
 best_individuals = 10
 
@@ -65,12 +65,12 @@ plt.boxplot(boxplot_data, labels=labels, patch_artist=True, showfliers=True,
             medianprops=dict(linestyle='-', linewidth=2.5, color='red'),
             widths=0.7)
 
-# Perform statistical tests (Mann-Whitney U) and display p-values
+# Perform statistical tests (Two-tailed t-test) and display p-values
 comparisons = [(0, 1), (2, 3)]
 p_values = []
 
 for i, j in comparisons:
-    _, p = mannwhitneyu(boxplot_data[i], boxplot_data[j], alternative='two-sided')
+    _, p = ttest_ind(boxplot_data[i], boxplot_data[j], equal_var=False)  # Two-tailed independent t-test
     p_values.append(p)
 
 # Print the mean and std values for each group
@@ -103,13 +103,16 @@ plt.yticks(fontsize=12)
 plt.show()
 
 # Perform Shapiro-Wilk test for normality
-shapiro_p_values = {}
+shapiro_results = {}
+
+# Perform Shapiro-Wilk test for normality
 for idx, dataset in enumerate(boxplot_data):
     stat, p_value = shapiro(dataset)
     label = labels[idx]
-    shapiro_p_values[label] = p_value
+    # Store both the statistic and the p-value in a dictionary
+    shapiro_results[label] = {'statistic': stat, 'p_value': p_value}
 
 # Display Shapiro-Wilk test results
-print("Shapiro-Wilk test results (p-values):")
-for label, p_value in shapiro_p_values.items():
-    print(f"{label}: p = {p_value:.5f}")
+print("Shapiro-Wilk test results (statistic and p-values):")
+for label, result in shapiro_results.items():
+    print(f"{label}: statistic = {result['statistic']:.5f}, p = {result['p_value']:.5f}")
