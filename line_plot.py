@@ -35,11 +35,9 @@ def process_files(file_list):
 
     return avg_max, std_max, avg_avg, std_avg
 
-# Main function to process and plot the data for both EA1 and EA2
 def main():
-    base_dir = "."  # Specify the base directory
+    base_dir = "."
 
-    # Manually specifying the file paths for EA1 and EA2 runs for both enemy groups (10 runs each)
     ea1_files_enemy1 = [
         os.path.join(base_dir, "train_run_enemy[1, 4, 7, 6]", f"EA1_train_run{i}_enemy[1, 4, 7, 6]", "results_EA1.csv")
         for i in range(1, 11)  # Assuming 10 runs
@@ -65,9 +63,8 @@ def main():
     avg_max_ea2, std_max_ea2, avg_avg_ea2, std_avg_ea2 = process_files(ea2_files_enemy1)
 
     # Generations (X-axis)
-    generations = list(range(len(avg_max_ea1)))  # Assuming both EA1 and EA2 have the same number of generations
+    generations = list(range(len(avg_max_ea1)))
 
-    # Plot for EA1 vs EA2 for the first enemy group
     plt.figure(figsize=(12, 6))
 
     # Plot for EA1
@@ -111,7 +108,6 @@ def main():
     # Generations (X-axis)
     generations = list(range(len(avg_max_ea1_2)))  # Assuming both EA1 and EA2 have the same number of generations
 
-    # Plot for EA1 vs EA2 for the second enemy group
     plt.figure(figsize=(12, 6))
 
     # Plot for EA1
@@ -148,5 +144,4 @@ def main():
     plt.grid()
     plt.show()
 
-# Call the main function
 main()

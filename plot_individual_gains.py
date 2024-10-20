@@ -2,11 +2,9 @@ import os
 import csv
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import mannwhitneyu, shapiro
+from scipy.stats import ttest_ind, shapiro
 
-# Set the base directory, number of test runs
 best_individuals = 10
-test_runs = 5
 
 # Folders for the experiments (each corresponding to a different enemy group)
 folders = ["test_enemy[1, 4, 7, 6]", "test_enemy[1, 8, 3, 7, 6, 5]"]
@@ -29,7 +27,7 @@ def extract_individual_gains(file_path):
 # Store the extracted data
 data = {}
 
-# Loop through the folders and extract gains for both EA1 and EA2
+# Loop through the folders and extract gains EA1 and EA2
 for folder in folders:
     ea1_best_gains = []
     ea2_best_gains = []
@@ -67,15 +65,15 @@ plt.boxplot(boxplot_data, labels=labels, patch_artist=True, showfliers=True,
             medianprops=dict(linestyle='-', linewidth=2.5, color='red'),
             widths=0.7)
 
-# Perform statistical tests (Mann-Whitney U) and display p-values
+# Perform statistical tests (Two-tailed t-test) and display p-values
 comparisons = [(0, 1), (2, 3)]
 p_values = []
 
 for i, j in comparisons:
-    _, p = mannwhitneyu(boxplot_data[i], boxplot_data[j], alternative='two-sided')
+    _, p = ttest_ind(boxplot_data[i], boxplot_data[j], equal_var=False)  # Two-tailed independent t-test
     p_values.append(p)
 
-# Print the mean and standard deviation values for each group
+# Print the mean and std values for each group
 print("Mean and standard deviation gain per enemy:")
 for i in range(0, len(boxplot_data), 2):
     mean_ea1 = np.mean(boxplot_data[i])
@@ -104,14 +102,15 @@ plt.yticks(fontsize=12)
 # Show the plot
 plt.show()
 
-# Perform Shapiro-Wilk test for normality
-shapiro_p_values = {}
+# Perform Shapiro-Wilk
+shapiro_results = {}
+
 for idx, dataset in enumerate(boxplot_data):
     stat, p_value = shapiro(dataset)
     label = labels[idx]
-    shapiro_p_values[label] = p_value
 
-# Display Shapiro-Wilk test results
-print("Shapiro-Wilk test results (p-values):")
-for label, p_value in shapiro_p_values.items():
-    print(f"{label}: p = {p_value:.5f}")
+    shapiro_results[label] = {'statistic': stat, 'p_value': p_value}
+
+print("Shapiro-Wilk test results (statistic and p-values):")
+for label, result in shapiro_results.items():
+    print(f"{label}: statistic = {result['statistic']:.5f}, p = {result['p_value']:.5f}")
